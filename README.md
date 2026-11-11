@@ -19,7 +19,7 @@ AWS_SECRET_ACCESS_KEY=...
 AWS_DEFAULT_REGION=us-east-1
 ```
 - `.env`는 `.gitignore`에 포함되어 있어 GitHub에 올라가지 않습니다.
-- 기본 모델은 Claude Haiku 4.5입니다. 다른 모델을 쓰려면 `VOC_BEDROCK_MODEL`을 지정하세요.
+- 기본 모델은 Claude Sonnet 4.5입니다. 다른 모델을 쓰려면 `VOC_BEDROCK_MODEL`을 지정하세요.
 - 자격 증명이 없거나 `VOC_USE_LLM=0`이면 **규칙 모드**로 동작합니다. 규칙 모드는 메뉴명, 글자 유사도, 템플릿 문구만 씁니다.
 - Bedrock 호출이 실패하거나 하루 사용량 한도에 걸리면, 그 건만 규칙 모드로 자동 대체됩니다.
 

@@ -50,7 +50,7 @@ validate ─(빈 입력)→ 경고만 표시, 저장 안 함
 - `search_similar_vocs`는 임베딩·Chroma가 stdio MCP 서버 안에서 응답하지 않는 문제가 있어 로컬 도구로 둔다.
 
 ## LLM 설정
-- AWS Bedrock: 채팅 `global.anthropic.claude-haiku-4-5-20251001-v1:0`(`VOC_BEDROCK_MODEL`로 변경), 임베딩 `amazon.titan-embed-text-v2:0`.
+- AWS Bedrock: 채팅 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`(`VOC_BEDROCK_MODEL`로 변경), 임베딩 `amazon.titan-embed-text-v2:0`.
 - 사용 조건: AWS 자격 증명(`AWS_ACCESS_KEY_ID` 등, 프로젝트 루트 `.env` 가능)이 있고 `VOC_USE_LLM`이 0이 아님.
 - 조건이 안 되면 1차·3차 규칙과 템플릿 문구만으로 동작한다(테스트 기본 모드).
 

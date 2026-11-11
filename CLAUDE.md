@@ -15,7 +15,7 @@
 - 안내 문구: LLM 사용 가능하면 Bedrock Claude(10초 타임아웃), 실패·미설정이면 템플릿.
 - 개인정보(주민번호·전화·이메일)는 저장·LLM 전달 전에 가림.
 - `search_similar_vocs`는 MCP 서버(stdio) 안에서 임베딩·Chroma가 응답하지 않아 로컬 도구로 둠. MCP로 옮기지 말 것.
-- 기본 모델 Haiku 4.5(`VOC_BEDROCK_MODEL`로 변경). Sonnet 계열은 계정 일일 토큰 한도에 자주 걸림.
+- 기본 모델 Sonnet 4.5(`VOC_BEDROCK_MODEL`로 변경). 계정 일일 토큰 한도에 걸리면 규칙 모드로 대체되며, 한도는 매일 갱신됨.
 - 빈/공백 입력은 경고만 표시하고 저장하지 않음.
 - 범위 외 금지: 화면 메뉴 편집, 발표 자료 등. 문서는 README.md, SERVICE.md, 기대값표(`data/sample_vocs_expected.csv`)만.
 
