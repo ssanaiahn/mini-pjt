@@ -69,7 +69,10 @@ def init_db(conn, reset=False, menus=None):
             matched_menus TEXT NOT NULL,
             guidance_draft TEXT,
             guidance_source TEXT,
-            created_at TEXT NOT NULL);
+            created_at TEXT NOT NULL,
+            match_source TEXT,
+            similar_voc_id INTEGER,
+            similarity REAL);
         CREATE TABLE IF NOT EXISTS voc_menu_matches(
             voc_id INTEGER NOT NULL REFERENCES voc_history(id),
             menu TEXT NOT NULL,
@@ -84,6 +87,7 @@ def init_db(conn, reset=False, menus=None):
             user_id TEXT, menu TEXT, title TEXT, status TEXT);
         """
     )
+    _migrate(conn)
     if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0:
         conn.executemany("INSERT INTO users VALUES (?,?,?,?)", MOCK_USERS)
         for uid, *_ in MOCK_USERS:
@@ -93,3 +97,12 @@ def init_db(conn, reset=False, menus=None):
                     (uid, m["name"], f"{m['name']} 샘플 건 ({uid})", "완료"),
                 )
     conn.commit()
+
+
+def _migrate(conn):
+    """이전 버전 DB에 유사 VOC 판정용 컬럼이 없으면 추가한다(기존 이력 유지)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(voc_history)")}
+    for name, typ in (("match_source", "TEXT"), ("similar_voc_id", "INTEGER"),
+                      ("similarity", "REAL")):
+        if name not in cols:
+            conn.execute(f"ALTER TABLE voc_history ADD COLUMN {name} {typ}")

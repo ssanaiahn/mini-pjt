@@ -12,6 +12,10 @@ def render_result(result):
         return
     if result["is_processable"]:
         st.success("판정: 처리 가능")
+        sim = result.get("similar_voc")
+        if result.get("match_source") == "similar" and sim:
+            st.info(f"본문에 메뉴명이 없어 과거 VOC #{sim['id']}와의 유사도"
+                    f"({sim['similarity']:.2f})로 판정했습니다: \"{sim['voc_text']}\"")
         st.write("매칭된 메뉴: " + ", ".join(result["matched_menus"]))
         st.write("메뉴별 누적 횟수:", result["menu_counts"])
         if result["is_frequent"]:
@@ -54,7 +58,8 @@ def main():
             st.error(f"처리 중 오류가 발생했습니다: {e}")
     with st.expander("VOC 이력"):
         rows = conn.execute(
-            "SELECT id, registrant_id, voc_text, is_processable, matched_menus "
+            "SELECT id, registrant_id, voc_text, is_processable, matched_menus, "
+            "match_source, similar_voc_id, similarity "
             "FROM voc_history ORDER BY id DESC LIMIT 50").fetchall()
         st.dataframe([dict(r) for r in rows])
     conn.close()

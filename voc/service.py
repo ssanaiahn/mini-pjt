@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from .guidance import generate_guidance_with_source
 
 FREQUENT_THRESHOLD = 3
+SIMILARITY_THRESHOLD = 0.5
 
 
 def match_menus(voc_text, menus):
@@ -29,6 +30,36 @@ def match_menus(voc_text, menus):
             else:
                 start = text.find(term, start + 1)
     return sorted(first_pos, key=first_pos.get)
+
+
+def _bigrams(text):
+    t = normalize(text)
+    return {t[i:i + 2] for i in range(len(t) - 1)} if len(t) > 1 else {t} - {""}
+
+
+def similarity(a, b):
+    """공백 제거 후 글자 2개 묶음(bigram) 집합의 자카드 유사도(0~1)."""
+    x, y = _bigrams(a), _bigrams(b)
+    return len(x & y) / len(x | y) if x and y else 0.0
+
+
+def find_similar_voc(conn, voc_text, threshold=SIMILARITY_THRESHOLD):
+    """메뉴명으로 처리 가능 판정된 과거 VOC 중 가장 유사한 건(유사도 >= 기준).
+
+    유사 판정으로 처리된 건은 기준에서 제외해 유사의 유사로 번지는 것을 막는다.
+    동점이면 최근 건을 고른다. 없으면 None.
+    """
+    best, best_score = None, threshold
+    for r in conn.execute(
+            "SELECT id, voc_text, matched_menus FROM voc_history WHERE is_processable=1"
+            " AND COALESCE(match_source, 'menu')='menu' ORDER BY id DESC"):
+        score = similarity(voc_text, r["voc_text"])
+        if score > best_score or (best is None and score == best_score):
+            best_score = score
+            best = {"id": r["id"], "voc_text": r["voc_text"],
+                    "menus": [m for m in r["matched_menus"].split("|") if m],
+                    "similarity": round(score, 2)}
+    return best
 
 
 def get_menu_counts(conn):
@@ -68,15 +99,25 @@ def process_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
     registrant_id = registrant_id.strip()
     menus = menus or load_menus()
     matched = match_menus(voc_text, menus)
+    similar = None
+    if matched:
+        match_source = "menu"
+    else:
+        similar = find_similar_voc(conn, voc_text)
+        if similar:
+            matched = similar["menus"]
+        match_source = "similar" if similar else None
     processable = bool(matched)
     guidance, source = (None, None) if processable else generate_guidance_with_source(
         voc_text, use_api=use_api)
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     cur = conn.execute(
         "INSERT INTO voc_history(registrant_id, voc_text, is_processable, matched_menus,"
-        " guidance_draft, guidance_source, created_at) VALUES (?,?,?,?,?,?,?)",
+        " guidance_draft, guidance_source, created_at, match_source, similar_voc_id,"
+        " similarity) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (registrant_id, voc_text, int(processable), "|".join(matched), guidance, source,
-         created_at))
+         created_at, match_source, similar and similar["id"],
+         similar and similar["similarity"]))
     conn.executemany("INSERT INTO voc_menu_matches(voc_id, menu) VALUES (?,?)",
                      [(cur.lastrowid, m) for m in matched])
     conn.commit()
@@ -91,4 +132,5 @@ def process_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
             "frequent_menus": frequent, "is_frequent": bool(frequent),
             "guidance_draft": guidance, "guidance_source": source,
             "created_at": created_at, "account_info": account,
-            "business_data": business, "input_validation": v, "voc_id": cur.lastrowid}
+            "business_data": business, "input_validation": v, "voc_id": cur.lastrowid,
+            "match_source": match_source, "similar_voc": similar}
