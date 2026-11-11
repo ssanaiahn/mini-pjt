@@ -1,0 +1,11 @@
+seq,registrant_id,voc_text,expected_processable,expected_menus,expected_frequent
+1,u001,주문내역이 안 보여요,true,주문조회,false
+2,u002,배송현황과 환불 문의드립니다,true,배송조회|환불신청,false
+3,u001,오늘 날씨 어때요,false,,false
+4,u003,주문조회 화면이 너무 느려요,true,주문조회,false
+5,u002,쿠폰함에서 쿠폰이 사라졌어요,true,쿠폰,false
+6,u004,주문내역 오류가 또 나요,true,주문조회,true
+7,u005,점심 메뉴 추천해 주세요,false,,false
+8,u001,환불 진행 상황 알려주세요,true,환불신청,false
+9,u003,배송조회와 주문조회 둘 다 안 열려요,true,주문조회|배송조회,true
+10,u006,프로필 사진을 바꾸고 싶어요,true,회원정보수정,false
