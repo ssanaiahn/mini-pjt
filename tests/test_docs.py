@@ -13,7 +13,8 @@ def read(name):
 def test_ac4_readme_contents():
     """AC4"""
     t = read("README.md")
-    for s in ["pip install -r requirements.txt", "streamlit run", "ANTHROPIC_API_KEY", "pytest"]:
+    for s in ["pip install -r requirements.txt", "streamlit run", "AWS_ACCESS_KEY_ID", "pytest",
+              "MCP", "LangGraph"]:
         assert s in t
 
 
@@ -44,5 +45,6 @@ def test_ac4_claude_md():
 def test_ac4_requirements():
     """AC4"""
     t = read("requirements.txt").lower()
-    for s in ["streamlit", "anthropic", "pytest"]:
+    for s in ["streamlit", "pytest", "langchain-aws", "langgraph", "langchain-mcp-adapters",
+              "fastmcp", "langchain-chroma"]:
         assert s in t

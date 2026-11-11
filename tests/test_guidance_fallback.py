@@ -1,14 +1,11 @@
+"""안내 문구: Bedrock Claude(가짜 모델로 대체) 성공·오류·10초 초과·LLM 미사용."""
 import socket
-import sys
 import types
-from pathlib import Path
 
-import anthropic
 import pytest
+from botocore.exceptions import ReadTimeoutError
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from voc import guidance  # noqa: E402
+from voc import guidance, llm
 
 
 @pytest.fixture(autouse=True)
@@ -20,69 +17,64 @@ def block_sockets(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", deny)
 
 
-def _mock_client(monkeypatch, create):
-    """anthropic.Anthropic을 모의 객체로 교체. (생성 횟수, create 호출 기록) 반환."""
-    state = {"created": 0, "calls": []}
+def _fake_model(monkeypatch, invoke):
+    """llm.chat_model을 가짜로 교체. 생성 시 timeout과 invoke 호출을 기록."""
+    state = {"created": [], "calls": []}
 
-    def recording_create(*args, **kw):
-        state["calls"].append((args, kw))
-        return create(*args, **kw)
+    def chat_model(timeout=30, max_tokens=800):
+        state["created"].append(timeout)
 
-    class Client:
-        def __init__(self, **kw):
-            state["created"] += 1
-            self.messages = types.SimpleNamespace(create=recording_create)
+        def rec(prompt):
+            state["calls"].append(prompt)
+            return invoke(prompt)
+        return types.SimpleNamespace(invoke=rec)
 
-    monkeypatch.setattr(anthropic, "Anthropic", Client)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    monkeypatch.setattr(llm, "chat_model", chat_model)
+    monkeypatch.setenv("VOC_USE_LLM", "1")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "dummy")
     return state
 
 
 def test_ac6_api_exception_falls_back_to_template(monkeypatch):
-    """AC6(a): 일반 예외 -> template_error."""
-    def boom(**kw):
+    def boom(prompt):
         raise RuntimeError("fail")
-    state = _mock_client(monkeypatch, boom)
-    text, source = guidance.generate_guidance_with_source("x")
-    assert text == guidance.TEMPLATE
-    assert source == "template_error"
+    state = _fake_model(monkeypatch, boom)
+    assert guidance.generate_guidance_with_source("x") == (guidance.TEMPLATE, "template_error")
     assert len(state["calls"]) == 1
 
 
 def test_ac6_timeout_falls_back_and_request_timeout_is_10(monkeypatch):
-    """AC6(b): create가 timeout=10 키워드로 호출된 뒤 APITimeoutError -> template_timeout."""
-    def slow(**kw):
-        raise anthropic.APITimeoutError(request=types.SimpleNamespace(method="POST", url="https://api.anthropic.com"))
-    state = _mock_client(monkeypatch, slow)
-    text, source = guidance.generate_guidance_with_source("x")
-    assert len(state["calls"]) == 1
-    assert state["calls"][0][1].get("timeout") == 10
-    assert text == guidance.TEMPLATE
-    assert source == "template_timeout"
+    def slow(prompt):
+        raise ReadTimeoutError(endpoint_url="https://bedrock-runtime")
+    state = _fake_model(monkeypatch, slow)
+    assert guidance.generate_guidance_with_source("x") == (guidance.TEMPLATE, "template_timeout")
+    assert state["created"] == [10]
 
 
-def test_ac6_no_key_uses_template_without_client(monkeypatch):
-    """AC6(c): 키 없음 -> 클라이언트 미생성, template_no_key."""
-    state = _mock_client(monkeypatch, lambda **kw: None)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    text, source = guidance.generate_guidance_with_source("x")
-    assert text == guidance.TEMPLATE
-    assert source == "template_no_key"
-    assert state["created"] == 0 and state["calls"] == []
+def test_ac6_llm_disabled_uses_template_without_model(monkeypatch):
+    state = _fake_model(monkeypatch, lambda p: None)
+    monkeypatch.setenv("VOC_USE_LLM", "0")
+    assert guidance.generate_guidance_with_source("x") == (guidance.TEMPLATE, "template_no_key")
+    assert state["created"] == [] and state["calls"] == []
 
 
-def test_ac6_success_uses_api_text(monkeypatch):
-    """AC6(d): 정상 응답 -> 응답 문구, claude."""
-    msg = types.SimpleNamespace(content=[types.SimpleNamespace(text="안내 초안")])
-    state = _mock_client(monkeypatch, lambda **kw: msg)
-    assert guidance.generate_guidance_with_source("x") == ("안내 초안", "claude")
-    assert state["calls"][0][1].get("timeout") == 10
+def test_ac6_no_aws_credentials_uses_template(monkeypatch):
+    state = _fake_model(monkeypatch, lambda p: None)
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
+    assert guidance.generate_guidance_with_source("x")[1] == "template_no_key"
+    assert state["created"] == []
 
 
-@pytest.mark.parametrize("val", ["", "   "])
-def test_ac6_blank_key_is_no_key(monkeypatch, val):
-    state = _mock_client(monkeypatch, lambda **kw: None)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", val)
-    text, source = guidance.generate_guidance_with_source("x")
-    assert text and source == guidance.SOURCE_NO_KEY
-    assert state["created"] == 0
+def test_ac6_success_uses_model_text_and_reason(monkeypatch):
+    msg = types.SimpleNamespace(content=[{"type": "text", "text": "안내 초안"}])
+    state = _fake_model(monkeypatch, lambda p: msg)
+    out = guidance.generate_guidance_with_source("회의실 예약", reason="회의실은 등록 메뉴 아님")
+    assert out == ("안내 초안", "claude")
+    assert "회의실 예약" in state["calls"][0] and "회의실은 등록 메뉴 아님" in state["calls"][0]
+    assert state["created"] == [10]
+
+
+def test_ac6_empty_model_text_is_error(monkeypatch):
+    _fake_model(monkeypatch, lambda p: types.SimpleNamespace(content="  "))
+    assert guidance.generate_guidance_with_source("x")[1] == "template_error"

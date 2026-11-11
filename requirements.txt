@@ -1,3 +1,16 @@
 streamlit
-anthropic
 pytest
+# Claude(Bedrock)·임베딩
+boto3
+botocore
+langchain
+langchain-core
+langchain-aws
+# 에이전트·그래프·MCP
+langgraph
+langchain-mcp-adapters
+fastmcp
+# 과거 VOC 의미 검색
+chromadb
+langchain-chroma
+pydantic

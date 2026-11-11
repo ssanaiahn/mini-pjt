@@ -39,8 +39,10 @@ def parse_counts(v):
 
 def test_ac1_unknown_registrant_frequent(conn):
     """AC1"""
+    from voc.db import load_menus
+    name = load_menus()[0]["name"]
     for _ in range(3):
-        res = process_voc(conn, "주문조회 문의", "nobody", use_api=False)
+        res = process_voc(conn, f"{name} 문의", "nobody", use_api=False)
     assert res["is_frequent"]
     assert res["account_info"]["found"] is False
     assert res["account_info"]["account"] is None
@@ -106,8 +108,8 @@ def test_ac1_unprocessable_not_counted_but_saved(conn):
     for r in load_rows():
         process_voc(conn, r["voc_text"], r["registrant_id"])
     counts = {x["menu"]: x["count"] for x in conn.execute("SELECT * FROM menu_counts")}
-    assert counts == {"주문조회": 4, "배송조회": 2, "환불신청": 2,
-                      "쿠폰": 1, "회원정보수정": 1}
+    assert counts == {"보안 공지": 4, "비밀유지계약": 1, "정보보호 규정": 2, "사용자 관리": 1,
+                      "개선 제안": 1, "보안 신고": 1}
     assert conn.execute("SELECT COUNT(*) FROM voc_history").fetchone()[0] == 10
     assert conn.execute(
         "SELECT COUNT(*) FROM voc_history WHERE is_processable=0").fetchone()[0] == 2

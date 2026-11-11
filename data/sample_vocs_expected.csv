@@ -1,11 +1,11 @@
 seq,voc_text,registrant_id,expected_processable,expected_menus,expected_counts,expected_frequent,expected_lookup_menus,case_tags
-1,주문내역이 안 보여요,u001,true,주문조회,주문조회:1,false,,
-2,배송 현황과 환불 문의드립니다,u002,true,배송조회|환불신청,배송조회:1|환불신청:1,false,,multi_menu
-3,오늘 날씨 어때요,u001,false,,,false,,unprocessable
-4,주문 조회 화면이 너무 느려요,u003,true,주문조회,주문조회:2,false,,spacing
-5,환불 쿠폰이 사라졌어요,u002,true,쿠폰,쿠폰:1,false,,overlap_alias
-6,주문내역 오류가 또 나요 주문조회도 안 돼요,u004,true,주문조회,주문조회:3,true,주문조회,reach_3
-7,점심 메뉴 추천해 주세요,u005,false,,,false,,unprocessable
-8,환불 진행 상황 알려주세요,u001,true,환불신청,환불신청:2,false,,
-9,배송조회와 주문조회 둘 다 안 열려요,u003,true,배송조회|주문조회,배송조회:2|주문조회:4,true,주문조회,multi_menu
-10,프로필 사진을 바꾸고 싶어요,u006,true,회원정보수정,회원정보수정:1,false,,
+1,보안 공지가 메일로 안 와요,u001,true,보안 공지,보안 공지:1,false,,
+2,서약서 제출 기한과 정보보호 규정 개정 내용 알려주세요,u002,true,비밀유지계약|정보보호 규정,비밀유지계약:1|정보보호 규정:1,false,,multi_menu
+3,오늘 점심 메뉴 추천해 주세요,u001,false,,,false,,unprocessable
+4,보안공지 게시판이 안 열려요,u003,true,보안 공지,보안 공지:2,false,,spacing
+5,사용자 권한 요청은 어디서 하나요,u004,true,사용자 관리,사용자 관리:1,false,,
+6,보안 가이드 문서 링크가 깨졌어요,u005,true,보안 공지,보안 공지:3,true,보안 공지,reach_3
+7,회의실 예약이 안 돼요,u006,false,,,false,,unprocessable
+8,개선 제안 하나 드립니다 결재 화면이 느려요,u001,true,개선 제안,개선 제안:1,false,,
+9,보안 신고 접수했는데 보안 공지에도 올라오나요,u002,true,보안 신고|보안 공지,보안 신고:1|보안 공지:4,true,보안 공지,multi_menu
+10,정보보호 가이드 최신본 어디 있나요,u003,true,정보보호 규정,정보보호 규정:2,false,,

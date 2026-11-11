@@ -1,8 +1,10 @@
-"""VOC 판정·저장·누적(이력에서 계산)·모의 DB 조회."""
-from .db import load_menus, normalize, validate_menus
+"""VOC 판정 단계별 함수(규칙 매칭·글자 유사도·저장·누적·모의 DB 조회).
+
+전체 흐름은 voc/graph.py의 LangGraph가 이 함수들을 노드로 엮어 실행한다.
+"""
 from datetime import datetime, timezone
 
-from .guidance import generate_guidance_with_source
+from .db import normalize, validate_menus
 
 FREQUENT_THRESHOLD = 3
 SIMILARITY_THRESHOLD = 0.5
@@ -43,23 +45,27 @@ def similarity(a, b):
     return len(x & y) / len(x | y) if x and y else 0.0
 
 
-def find_similar_voc(conn, voc_text, threshold=SIMILARITY_THRESHOLD):
-    """메뉴명으로 처리 가능 판정된 과거 VOC 중 가장 유사한 건(유사도 >= 기준).
+def bigram_candidates(conn, voc_text, k=3):
+    """메뉴명으로 처리된 과거 VOC를 글자 유사도 높은 순(동점이면 최근 건)으로 k건."""
+    rows = conn.execute(
+        "SELECT id, voc_text, matched_menus FROM voc_history WHERE is_processable=1"
+        " AND COALESCE(match_source, 'menu')='menu' ORDER BY id DESC").fetchall()
+    scored = sorted(((similarity(voc_text, r["voc_text"]), r) for r in rows),
+                    key=lambda x: (-x[0], -x[1]["id"]))
+    return [{"id": r["id"], "voc_text": r["voc_text"],
+             "menus": [m for m in r["matched_menus"].split("|") if m],
+             "similarity": round(s, 2), "score": s} for s, r in scored[:k]]
 
-    유사 판정으로 처리된 건은 기준에서 제외해 유사의 유사로 번지는 것을 막는다.
-    동점이면 최근 건을 고른다. 없으면 None.
+
+def find_similar_voc(conn, voc_text, threshold=SIMILARITY_THRESHOLD):
+    """글자 유사도가 기준 이상인 가장 유사한 과거 VOC(메뉴명 판정 건만). 없으면 None.
+
+    유사·에이전트 판정으로 처리된 건은 기준에서 제외해 판정이 번지는 것을 막는다.
     """
-    best, best_score = None, threshold
-    for r in conn.execute(
-            "SELECT id, voc_text, matched_menus FROM voc_history WHERE is_processable=1"
-            " AND COALESCE(match_source, 'menu')='menu' ORDER BY id DESC"):
-        score = similarity(voc_text, r["voc_text"])
-        if score > best_score or (best is None and score == best_score):
-            best_score = score
-            best = {"id": r["id"], "voc_text": r["voc_text"],
-                    "menus": [m for m in r["matched_menus"].split("|") if m],
-                    "similarity": round(score, 2)}
-    return best
+    top = bigram_candidates(conn, voc_text, k=1)
+    if top and top[0]["score"] >= threshold:
+        return {k: v for k, v in top[0].items() if k != "score"}
+    return None
 
 
 def get_menu_counts(conn):
@@ -90,47 +96,25 @@ def lookup_mock_db(conn, registrant_id, frequent_menus):
     return account, [dict(r) for r in rows]
 
 
-def process_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
-    v = validate_input(voc_text, registrant_id)
-    if not v["is_valid"]:
-        return {"error": " ".join(v["warnings"]), "warnings": v["warnings"],
-                "input_validation": v}
-    voc_text = voc_text.strip()
-    registrant_id = registrant_id.strip()
-    menus = menus or load_menus()
-    matched = match_menus(voc_text, menus)
-    similar = None
-    if matched:
-        match_source = "menu"
-    else:
-        similar = find_similar_voc(conn, voc_text)
-        if similar:
-            matched = similar["menus"]
-        match_source = "similar" if similar else None
-    processable = bool(matched)
-    guidance, source = (None, None) if processable else generate_guidance_with_source(
-        voc_text, use_api=use_api)
+def save_voc(conn, registrant_id, voc_text, matched, guidance, source, match_source,
+             similar=None, judge_reason=None):
+    """이력 저장 + 처리 가능 건의 메뉴 매칭 기록. (voc_id, created_at)."""
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     cur = conn.execute(
         "INSERT INTO voc_history(registrant_id, voc_text, is_processable, matched_menus,"
         " guidance_draft, guidance_source, created_at, match_source, similar_voc_id,"
-        " similarity) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (registrant_id, voc_text, int(processable), "|".join(matched), guidance, source,
+        " similarity, judge_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (registrant_id, voc_text, int(bool(matched)), "|".join(matched), guidance, source,
          created_at, match_source, similar and similar["id"],
-         similar and similar["similarity"]))
+         similar and similar["similarity"], judge_reason))
     conn.executemany("INSERT INTO voc_menu_matches(voc_id, menu) VALUES (?,?)",
                      [(cur.lastrowid, m) for m in matched])
     conn.commit()
-    counts = get_menu_counts(conn)
-    snapshot = {m: counts[m] for m in matched}
-    frequent = [m for m in matched if snapshot[m] >= FREQUENT_THRESHOLD]
-    account, business = (None, [])
-    if frequent:
-        account, business = lookup_mock_db(conn, registrant_id, frequent)
-    return {"is_processable": processable, "matched_menus": matched,
-            "menu_counts": snapshot, "count_snapshot": snapshot,
-            "frequent_menus": frequent, "is_frequent": bool(frequent),
-            "guidance_draft": guidance, "guidance_source": source,
-            "created_at": created_at, "account_info": account,
-            "business_data": business, "input_validation": v, "voc_id": cur.lastrowid,
-            "match_source": match_source, "similar_voc": similar}
+    return cur.lastrowid, created_at
+
+
+def process_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
+    """VOC 1건 판정·저장. 흐름은 voc/graph.py(LangGraph) 참고."""
+    from .graph import run_voc
+
+    return run_voc(conn, voc_text, registrant_id, menus=menus, use_api=use_api)

@@ -22,3 +22,6 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# Vector store (rebuilt from voc.db)
+data/chroma/

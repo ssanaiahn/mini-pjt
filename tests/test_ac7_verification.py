@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_ac7_tests_only_import_stdlib_or_requirements():
-    reqs = {re.split(r"[<>=\[ ]", l.strip())[0].lower()
+    reqs = {re.split(r"[<>=\[ ]", l.strip())[0].lower().replace("-", "_")
             for l in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
             if l.strip() and not l.startswith("#")}
     allowed = reqs | {"voc", "app", "tests", "conftest"} | set(sys.stdlib_module_names)

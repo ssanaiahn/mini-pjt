@@ -4,16 +4,27 @@ import sqlite3
 import pytest
 
 from voc.db import connect, init_db
-from voc.service import SIMILARITY_THRESHOLD, process_voc, similarity
+from voc.service import SIMILARITY_THRESHOLD, similarity
+
+
+MENUS = [
+    {"name": "주문조회", "aliases": ["주문내역"]},
+    {"name": "배송조회", "aliases": ["배송현황"]},
+    {"name": "쿠폰", "aliases": ["할인쿠폰"]},
+]
 
 
 @pytest.fixture
 def conn(tmp_path, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     c = connect(tmp_path / "t.db")
-    init_db(c, reset=True)
+    init_db(c, reset=True, menus=MENUS)
     yield c
     c.close()
+
+
+def process_voc(conn, text, rid, **kw):
+    from voc.service import process_voc as real
+    return real(conn, text, rid, menus=MENUS, **kw)
 
 
 def test_similarity_basics():
@@ -78,7 +89,7 @@ def test_migrates_old_db(tmp_path):
     raw.commit()
     raw.close()
     c = connect(path)
-    init_db(c)
+    init_db(c, menus=MENUS)
     res = process_voc(c, "주뮨내역이 안 보여요", "u001", use_api=False)
     assert res["matched_menus"] == ["주문조회"] and res["similar_voc"]["id"] == 1
     c.close()

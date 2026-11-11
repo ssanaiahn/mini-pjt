@@ -1,16 +1,21 @@
 # 프로젝트: VOC 접수 판단·응답 보조
 
-과제 제출용 1인 프로젝트. Streamlit 앱(`app.py`), 로직 `voc/`, 메뉴 설정 `config/menus.json`, SQLite `data/voc.db`(모의 데이터만).
+과제 제출용 1인 프로젝트. Streamlit 앱(`app.py`), 로직 `voc/`, 메뉴 설정 `config/menus.json`, SQLite `data/voc.db`(모의 데이터만). 판정 흐름 LangGraph(`voc/graph.py`), Claude는 AWS Bedrock(`.env`의 AWS 자격 증명).
 
 ## 명령
 - 실행: `streamlit run app.py`
-- 테스트: `python -m pytest -q` (API 키 없이 템플릿 경로, 임시 DB 사용)
+- 테스트: `python -m pytest -q` (conftest가 `VOC_USE_LLM=0`으로 Bedrock 미호출, 임시 DB 사용)
+- MCP 서버 단독 실행: `python -m voc.mcp_server`
 
 ## 규칙
-- 판정은 규칙 기반: 본문에 메뉴명/별칭 부분 문자열이 있으면 처리 가능. 다중 매칭 시 각 메뉴 누적 +1.
-- 메뉴명이 없으면 과거 메뉴명 판정 VOC와 bigram 자카드 유사도 ≥ 0.5인 최유사 건의 메뉴를 차용(유사 판정 건은 기준 제외).
-- 처리 불가 건은 이력만 저장, 누적 제외. 누적(등록자 무관) 3 이상이면 모의 DB 조회.
-- 안내 문구: `ANTHROPIC_API_KEY`가 있으면 Claude API(10초 타임아웃), 실패·없음이면 템플릿.
+- 1차: 본문에 메뉴명/별칭 부분 문자열이 있으면 처리 가능. 다중 매칭 시 각 메뉴 누적 +1.
+- 2차(LLM 사용 시): 판정 에이전트(create_agent + ToolStrategy(JudgeResult))가 MCP `list_menus`·로컬 `search_similar_vocs`(Titan+Chroma)로 판정. 미등록 메뉴는 버림. 오류 시 3차.
+- 3차: 과거 메뉴명 판정 VOC와 bigram 자카드 유사도 ≥ 0.5인 최유사 건의 메뉴를 차용. 2·3차 비교 기준은 match_source='menu' 건만.
+- 처리 불가 건은 이력만 저장, 누적 제외. 누적(등록자 무관) 3 이상이면 모의 DB 조회 + 조회 에이전트 요약.
+- 안내 문구: LLM 사용 가능하면 Bedrock Claude(10초 타임아웃), 실패·미설정이면 템플릿.
+- 개인정보(주민번호·전화·이메일)는 저장·LLM 전달 전에 가림.
+- `search_similar_vocs`는 MCP 서버(stdio) 안에서 임베딩·Chroma가 응답하지 않아 로컬 도구로 둠. MCP로 옮기지 말 것.
+- 기본 모델 Haiku 4.5(`VOC_BEDROCK_MODEL`로 변경). Sonnet 계열은 계정 일일 토큰 한도에 자주 걸림.
 - 빈/공백 입력은 경고만 표시하고 저장하지 않음.
 - 범위 외 금지: 화면 메뉴 편집, 발표 자료 등. 문서는 README.md, SERVICE.md, 기대값표(`data/sample_vocs_expected.csv`)만.
 

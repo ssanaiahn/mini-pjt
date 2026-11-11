@@ -86,7 +86,7 @@ def _env_app(tmp_path, monkeypatch, menus_path=None):
 
 def test_ac3_env_first_run_creates_db_and_shows_verdict(tmp_path, monkeypatch):
     db, at = _env_app(tmp_path, monkeypatch)
-    at = submit(at, "주문조회 문의", "u001")
+    at = submit(at, f"{voc.db.load_menus()[0]['name']} 문의", "u001")
     assert not at.exception
     assert any("처리 가능" in s.value for s in at.success)
     at = submit(at, "zzqq 내용", "u001")
@@ -98,7 +98,7 @@ def test_ac3_env_first_run_creates_db_and_shows_verdict(tmp_path, monkeypatch):
 def test_ac3_env_frequent_unknown_registrant(tmp_path, monkeypatch):
     db, at = _env_app(tmp_path, monkeypatch)
     for _ in range(3):
-        at = submit(at, "주문조회 문의", "nobody")
+        at = submit(at, f"{voc.db.load_menus()[0]['name']} 문의", "nobody")
         assert not at.exception
     assert any("등록자 정보 없음" in w.value for w in at.warning)
     assert any("업무 데이터" in h.value for h in at.subheader)

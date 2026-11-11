@@ -72,7 +72,8 @@ def init_db(conn, reset=False, menus=None):
             created_at TEXT NOT NULL,
             match_source TEXT,
             similar_voc_id INTEGER,
-            similarity REAL);
+            similarity REAL,
+            judge_reason TEXT);
         CREATE TABLE IF NOT EXISTS voc_menu_matches(
             voc_id INTEGER NOT NULL REFERENCES voc_history(id),
             menu TEXT NOT NULL,
@@ -103,6 +104,6 @@ def _migrate(conn):
     """이전 버전 DB에 유사 VOC 판정용 컬럼이 없으면 추가한다(기존 이력 유지)."""
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(voc_history)")}
     for name, typ in (("match_source", "TEXT"), ("similar_voc_id", "INTEGER"),
-                      ("similarity", "REAL")):
+                      ("similarity", "REAL"), ("judge_reason", "TEXT")):
         if name not in cols:
             conn.execute(f"ALTER TABLE voc_history ADD COLUMN {name} {typ}")
