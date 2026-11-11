@@ -13,3 +13,27 @@
 - 빈/공백 입력은 경고만 표시하고 저장하지 않음.
 - 범위 외 금지: 화면 메뉴 편집, 발표 자료 등. 문서는 README.md, SERVICE.md, 기대값표(`data/sample_vocs_expected.csv`)만.
 
+## 개발 워크플로우 (Ouroboros)
+
+```
+Interview → Seed → Execute → Evaluate
+    ↑                           ↓
+    └─── Evolutionary Loop ─────┘
+```
+
+| Command | Loads |
+|---------|-------|
+| `ooo` | — |
+| `ooo interview` | `ouroboros:socratic-interviewer` |
+| `ooo seed` | `ouroboros:seed-architect` |
+| `ooo run` | MCP required |
+| `ooo evolve` | MCP: `evolve_step` |
+| `ooo evaluate` | `ouroboros:evaluator` |
+| `ooo unstuck` | `ouroboros:{persona}` |
+| `ooo status` | MCP: `session_status` |
+| `ooo setup` | — |
+| `ooo help` | — |
+
+- 현재 Seed: `seed_f1b636967d57` (v1.1.0)
+- 에이전트는 필요할 때 로드: socratic-interviewer, ontologist, seed-architect, evaluator, advocate, contrarian, judge, hacker, simplifier, researcher, architect
+
