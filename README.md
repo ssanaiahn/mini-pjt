@@ -4,7 +4,7 @@ VOC 본문과 등록자 ID를 입력하면 등록 메뉴명·별칭 기준으로
 
 ## 설치
 ```bash
-pip install streamlit anthropic pytest
+pip install -r requirements.txt
 ```
 
 ## 실행

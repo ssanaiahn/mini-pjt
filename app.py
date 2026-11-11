@@ -1,7 +1,7 @@
 """VOC 접수 판단·응답 보조 Streamlit 앱. 실행: streamlit run app.py"""
 import streamlit as st
 
-from voc.db import connect, init_db
+from voc import db as vocdb
 from voc.service import process_voc
 
 
@@ -17,11 +17,13 @@ def render_result(result):
         if result["is_frequent"]:
             st.info("자주 들어오는 VOC (누적 3회 이상)")
             st.subheader("등록자 계정 정보")
-            if result["account_info"]:
-                st.json(result["account_info"])
+            acc = result["account_info"] or {}
+            if acc.get("found"):
+                st.json(acc["account"])
             else:
-                st.write("모의 DB에 해당 등록자가 없습니다.")
+                st.warning("등록자 정보 없음")
             st.subheader("업무 데이터")
+            st.write("조회 대상 메뉴: " + ", ".join(result["frequent_menus"]))
             if result["business_data"]:
                 st.dataframe(result["business_data"])
             else:
@@ -34,15 +36,20 @@ def render_result(result):
 
 def main():
     st.title("VOC 접수 판단·응답 보조")
-    conn = connect()
-    init_db(conn)
+    try:
+        menus = vocdb.load_menus()
+    except Exception as e:  # 설정 파일 오류: 판정을 막고 오류 표시
+        st.error(f"메뉴 설정 파일을 읽을 수 없습니다: {e}")
+        return
+    conn = vocdb.connect()
+    vocdb.init_db(conn, menus=menus)
     with st.form("voc_form"):
         voc_text = st.text_area("VOC 본문")
         registrant_id = st.text_input("등록자 ID")
         submitted = st.form_submit_button("제출")
     if submitted:
         try:
-            render_result(process_voc(conn, voc_text, registrant_id))
+            render_result(process_voc(conn, voc_text, registrant_id, menus=menus))
         except Exception as e:  # 화면이 깨지지 않도록 오류 표시
             st.error(f"처리 중 오류가 발생했습니다: {e}")
     with st.expander("VOC 이력"):
