@@ -73,9 +73,10 @@ Bedrock 사용 한도에 걸리거나 장애가 나도 규칙 판정과 템플�
 | `get_menu_count` | VOC 이력 | 메뉴별 처리 가능 VOC 누적 건수 | MCP | 판정, 조회 |
 | `lookup_account` | 계정 | 등록자 계정 정보 조회 | MCP | 조회 |
 | `lookup_business_data` | 업무 데이터 | 등록자의 메뉴별 업무 이력 조회 | MCP | 조회 |
-| `search_similar_vocs` | VOC 이력 | 의미가 비슷한 과거 VOC와 그 처리 메뉴 검색 | 로컬 LangChain 도구(Titan 임베딩 + Chroma) | 판정 |
+| `search_similar_vocs` | VOC 이력 | 비슷한 과거 VOC와 그 처리 메뉴 검색. **하이브리드**: 의미 검색(Titan+Chroma)으로 후보 2k건 → 0.7×의미 + 0.3×글자 유사도로 리랭킹해 상위 k건 | 로컬 LangChain 도구 | 판정 |
 
 - 판정 에이전트: Claude Sonnet 4.6(Bedrock). 결과는 구조화 출력으로 받는다.
+- 안내 문구: LCEL 체인 `프롬프트 템플릿 | 모델.with_structured_output(GuidanceDraft)` → 안내 문구·처리 불가 이유·문의처를 dict(Pydantic)로 받는다.
 - 조회 에이전트: 같은 모델. 반복 VOC가 들어오면 담당자용 요약을 쓴다.
 - 판정 흐름 전체는 LangGraph로 구성했다(부록 참고).
 

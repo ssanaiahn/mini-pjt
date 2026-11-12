@@ -64,14 +64,31 @@ def embedding_scorer(query, texts):
 embedding_scorer.threshold = 0.3
 
 
+SEMANTIC_WEIGHT = 0.7  # 하이브리드 점수 = 0.7 × 의미 유사도 + 0.3 × 글자 유사도
+LEXICAL_WEIGHT = 0.3
+CANDIDATE_FACTOR = 2   # 의미 검색으로 k의 2배 후보를 가져와 하이브리드 점수로 다시 정렬
+
+
 def search(conn, voc_text, k=3, path=None):
-    """의미가 가까운 과거 VOC 상위 k건: [{id, voc_text, menus, similarity}] (similarity = 1 - 코사인 거리)."""
+    """하이브리드 검색: 의미(Titan+Chroma) 후보를 글자 유사도와 섞어 리랭킹한 상위 k건.
+
+    반환 [{id, voc_text, menus, similarity(하이브리드), semantic(1-코사인 거리), lexical(bigram)}]
+    """
+    from .service import similarity as lexical_similarity
+
     rows = reference_rows(conn)
     if not rows:
         return []
     store = _store(path)
     sync(store, rows)
-    hits = store.similarity_search_with_score(voc_text, k=min(k, len(rows)))
-    return [{"id": d.metadata["voc_id"], "voc_text": d.metadata["voc_text"],
-             "menus": [m for m in d.metadata["menus"].split("|") if m],
-             "similarity": round(1 - dist, 2)} for d, dist in hits]
+    hits = store.similarity_search_with_score(voc_text, k=min(k * CANDIDATE_FACTOR, len(rows)))
+    scored = []
+    for d, dist in hits:
+        sem = 1 - dist
+        lex = lexical_similarity(voc_text, d.metadata["voc_text"])
+        scored.append((SEMANTIC_WEIGHT * sem + LEXICAL_WEIGHT * lex, sem, lex, d.metadata))
+    scored.sort(key=lambda x: -x[0])
+    return [{"id": m["voc_id"], "voc_text": m["voc_text"],
+             "menus": [x for x in m["menus"].split("|") if x],
+             "similarity": round(score, 2), "semantic": round(sem, 2), "lexical": round(lex, 2)}
+            for score, sem, lex, m in scored[:k]]

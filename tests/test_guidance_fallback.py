@@ -18,16 +18,27 @@ def block_sockets(monkeypatch):
 
 
 def _fake_model(monkeypatch, invoke):
-    """llm.chat_model을 가짜로 교체. 생성 시 timeout과 invoke 호출을 기록."""
-    state = {"created": [], "calls": []}
+    """llm.chat_model을 가짜로 교체. 생성 시 timeout, 프롬프트 문자열, 구조화 출력 스키마를 기록.
+
+    invoke(prompt_text)는 content를 가진 응답(또는 예외)을 돌려주고, 가짜 구조화 출력이
+    그 텍스트를 GuidanceDraft.message로 바꾼다(LCEL 체인: 프롬프트 | 모델.with_structured_output).
+    """
+    from langchain_core.runnables import RunnableLambda
+
+    state = {"created": [], "calls": [], "schemas": []}
 
     def chat_model(timeout=30, max_tokens=800):
         state["created"].append(timeout)
 
-        def rec(prompt):
-            state["calls"].append(prompt)
-            return invoke(prompt)
-        return types.SimpleNamespace(invoke=rec)
+        def structured(schema):
+            state["schemas"].append(schema)
+
+            def run(prompt_value):
+                text = prompt_value.to_string()
+                state["calls"].append(text)
+                return schema(message=llm.text_of(invoke(text)), reason="", contact="")
+            return RunnableLambda(run)
+        return types.SimpleNamespace(with_structured_output=structured)
 
     monkeypatch.setattr(llm, "chat_model", chat_model)
     monkeypatch.setenv("VOC_USE_LLM", "1")
@@ -91,6 +102,19 @@ def test_template_makes_no_promise():
 def test_department_hints_only_with_department():
     menus = [{"name": "a", "scope": {"excludes": ["x (총무팀)", "y"]}}, {"name": "b"}]
     assert guidance.department_hints(menus) == ["x (총무팀)"]
+
+
+def test_guidance_is_lcel_chain_with_pydantic_output(monkeypatch):
+    """체크리스트 1번: 프롬프트 | 모델.with_structured_output(Pydantic) 체인."""
+    from langchain_core.runnables import RunnableSequence
+
+    state = _fake_model(monkeypatch, lambda p: types.SimpleNamespace(content="안내"))
+    chain = guidance.guidance_chain(llm.chat_model(timeout=10))
+    assert isinstance(chain, RunnableSequence)
+    draft = chain.invoke({"voc": "출입증 분실", "reason": "", "hints": ""})
+    assert isinstance(draft, guidance.GuidanceDraft) and draft.message == "안내"
+    assert state["schemas"] == [guidance.GuidanceDraft]
+    assert set(guidance.GuidanceDraft.model_fields) == {"message", "reason", "contact"}
 
 
 def test_ac6_empty_model_text_is_error(monkeypatch):

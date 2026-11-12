@@ -1,4 +1,6 @@
-"""처리 불가 VOC 안내 문구 초안: Bedrock Claude(사용 가능 시) 또는 템플릿."""
+"""처리 불가 VOC 안내 문구 초안: Bedrock Claude LCEL 체인(구조화 출력, 사용 가능 시) 또는 템플릿."""
+from pydantic import BaseModel, Field
+
 from . import llm
 
 SOURCE_CLAUDE = "claude"
@@ -15,16 +17,32 @@ TEMPLATE = (
     "담당 부서를 확인해 문의해 주시기 바랍니다. 감사합니다."
 )
 
-PROMPT = (
-    "다음 VOC는 사내 시스템의 등록 메뉴에 해당하지 않아 처리 불가로 판정되었습니다. "
+SYSTEM_PROMPT = (
+    "다음 VOC는 사내 정보보호 포털의 등록 메뉴에 해당하지 않아 처리 불가로 판정되었습니다. "
     "등록자에게 보낼 정중한 한국어 안내 문구 초안을 5문장 이내로 써 주세요. "
-    "처리할 수 없는 이유와 적절한 문의처를 찾도록 돕는 내용을 담고, 문구만 출력하세요.\n"
+    "처리할 수 없는 이유와 적절한 문의처를 찾도록 돕는 내용을 담으세요.\n"
     "- 이 창구에서 처리하거나 전달하겠다는 약속(예: '처리해 드리겠습니다', '전달하겠습니다')은 쓰지 마세요.\n"
-    "- 아래 [담당 부서 참고]에 이 VOC와 맞는 항목이 있으면 그 부서를 문의처로 안내하세요. "
+    "- [담당 부서 참고]에 이 VOC와 맞는 항목이 있으면 그 부서를 문의처로 안내하세요. "
     "없으면 부서를 지어내지 말고 사내 헬프데스크나 조직도에서 담당 부서를 확인하도록 안내하세요.\n"
-    "- 전화번호·이메일 같은 연락처는 지어내지 마세요.\n\n"
-    "VOC: {voc}{reason}{hints}"
+    "- 전화번호·이메일 같은 연락처는 지어내지 마세요.\n"
+    "결과는 message(안내 문구 전체), reason(처리 불가 이유 한 문장), contact(안내한 문의처)로 나눠 답하세요."
 )
+USER_PROMPT = "VOC: {voc}{reason}{hints}"
+
+
+class GuidanceDraft(BaseModel):
+    """안내 문구 초안(구조화 출력)."""
+    message: str = Field(description="등록자에게 보낼 안내 문구 전체(5문장 이내)")
+    reason: str = Field(description="처리할 수 없는 이유 한 문장")
+    contact: str = Field(description="안내한 문의처(부서명 또는 '사내 헬프데스크')")
+
+
+def guidance_chain(model):
+    """LCEL 체인: 프롬프트 템플릿 | 모델.with_structured_output(GuidanceDraft)."""
+    from langchain_core.prompts import ChatPromptTemplate
+
+    prompt = ChatPromptTemplate.from_messages([("system", SYSTEM_PROMPT), ("user", USER_PROMPT)])
+    return prompt | model.with_structured_output(GuidanceDraft)
 
 
 def department_hints(menus):
@@ -51,11 +69,11 @@ def generate_guidance_with_source(voc_text, use_api=True, reason=None, hints=Non
     if not use_api or not llm.llm_enabled():
         return template_guidance(voc_text), SOURCE_NO_KEY
     try:
-        model = llm.chat_model(timeout=API_TIMEOUT, max_tokens=400)
-        msg = model.invoke(PROMPT.format(
-            voc=voc_text, reason=f"\n판정 근거: {reason}" if reason else "",
-            hints=("\n[담당 부서 참고]\n" + "\n".join(f"- {h}" for h in hints)) if hints else ""))
-        text = llm.text_of(msg).strip()
+        model = llm.chat_model(timeout=API_TIMEOUT, max_tokens=600)
+        draft = guidance_chain(model).invoke({
+            "voc": voc_text, "reason": f"\n판정 근거: {reason}" if reason else "",
+            "hints": ("\n[담당 부서 참고]\n" + "\n".join(f"- {h}" for h in hints)) if hints else ""})
+        text = (draft.message or "").strip()
         if text:
             return text, SOURCE_CLAUDE
         return template_guidance(voc_text), SOURCE_ERROR

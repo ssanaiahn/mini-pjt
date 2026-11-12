@@ -15,7 +15,8 @@
 - 3차: 과거 메뉴명 판정 VOC와 bigram 자카드 유사도 ≥ 0.5인 최유사 건의 메뉴를 차용. 2·3차 비교 기준은 match_source='menu' 건만.
 - 처리 불가 건은 이력만 저장, 누적 제외. 누적(등록자 무관) 3 이상이면 모의 DB 조회 + 조회 에이전트 요약.
 - 처리 가능 건은 저장 뒤 `history` 단계에서 같은 메뉴의 비슷한 과거 처리 가능 VOC(최대 5건, Titan 임베딩 코사인 ≥ 0.3, LLM 미사용·오류 시 bigram ≥ 0.2)와 처리 내용을 보여주고, 조회 에이전트 요약도 이를 인용. 처리 내용은 실제 기록이 없어 `backfill_mock_handling`이 앱 실행 때 "(모의)" 메뉴별 문구로 채움(판정 근거로는 쓰지 않음).
-- 안내 문구: LLM 사용 가능하면 Bedrock Claude(10초 타임아웃), 실패·미설정이면 템플릿.
+- 안내 문구: LLM 사용 가능하면 LCEL 체인(`guidance_chain`: 프롬프트 | with_structured_output(GuidanceDraft), 10초 타임아웃), 실패·미설정이면 템플릿.
+- `search_similar_vocs`는 하이브리드: 의미 후보 2k건을 0.7×의미 + 0.3×bigram으로 리랭킹(`vectorstore.search`).
 - 개인정보(주민번호·전화·이메일)는 저장·LLM 전달 전에 가림.
 - `search_similar_vocs`는 MCP 서버(stdio) 안에서 임베딩·Chroma가 응답하지 않아 로컬 도구로 둠. MCP로 옮기지 말 것.
 - 기본 모델 Sonnet 4.6(`global.anthropic.claude-sonnet-4-6`, `VOC_BEDROCK_MODEL`로 변경). 2026-11-12 us-east-1의 Sonnet 4.5 일일 한도 초과로 4.6으로 변경, 평가 라운드도 4.6. 계정 일일 토큰 한도에 걸리면 규칙 모드로 대체되며, 한도는 매일 갱신됨.
