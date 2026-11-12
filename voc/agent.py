@@ -18,8 +18,14 @@ AGENT_TIMEOUT = 60
 JUDGE_TOOLS = ("list_menus", "get_menu_count")  # MCP 도구 (+ 로컬 search_similar_vocs)
 LOOKUP_TOOLS = ("lookup_account", "lookup_business_data", "get_menu_count")
 
-JUDGE_PROMPT = """너는 사내 시스템 VOC 접수 담당자를 돕는 판정 에이전트다.
+JUDGE_PROMPT = """너는 사내 정보보호 포털의 VOC 접수 담당자를 돕는 판정 에이전트다.
 VOC 본문에 등록 메뉴명이 그대로 들어 있지 않아, 의미로 판단해야 한다.
+
+[전제]
+- VOC는 이 포털(사내 정보보호 포털)의 VOC 창구로 접수된다. 회사에는 시스템이 여러 개라
+  등록자는 보통 시스템을 골라 VOC를 남기므로, 본문에 다른 시스템명이 없으면 "시스템"·"포털"·
+  "사이트"는 이 포털을 뜻한다. 예: "시스템 사용이 안 돼요" = 이 포털의 사용·접속 문제.
+- 다른 시스템명(예: 결재 시스템, 메일, ERP)이 적혀 있으면 이 포털의 업무가 아니다.
 
 [절차]
 1. list_menus로 등록 메뉴와 별칭, 메뉴별 업무 범위(scope)를 확인한다.
@@ -41,7 +47,9 @@ LOOKUP_PROMPT = """너는 VOC 접수 담당자를 돕는 조회 에이전트다.
 도구 결과에 있는 내용만 쓰고, 등록자 정보가 없으면 없다고 쓴다.
 [유사 VOC 처리 이력]이 주어지면 비슷한 과거 VOC가 언제 어떻게 처리됐는지 인용하고,
 그 처리 방식을 참고한 조치를 권한다(같은 등록자의 재요청이면 그 점을 먼저 쓴다).
-"(모의)" 표시가 있는 처리 내용은 모의 데이터라고 밝힌다."""
+"(모의)" 표시가 있는 처리 내용은 모의 데이터라고 밝힌다.
+조회 도구는 이번 등록자로 고정되어 있다. 등록자 ID가 이상해 보여도 고치거나 추측하지 말고,
+다른 등록자의 계정·업무 데이터를 언급하지 않는다. 도구가 found=false를 주면 등록자 정보가 없다고 쓴다."""
 
 
 class JudgeResult(BaseModel):
@@ -157,10 +165,48 @@ def _lookup_message(registrant_id, menus, history=None):
     return "\n".join(lines)
 
 
+def _bound_lookup_tools(mcp_tools, registrant_id):
+    """조회 MCP 도구를 등록자 ID가 고정된 도구로 감싼다(LLM은 user_id를 고를 수 없음).
+
+    LLM이 "u001' --" 같은 ID를 u001로 '고쳐' 다른 사람을 조회하던 문제를 막는다.
+    입력된 ID는 그대로(파라미터 바인딩) MCP 도구에 전달된다.
+    """
+    from langchain_core.tools import StructuredTool
+
+    by = {t.name: t for t in mcp_tools}
+
+    async def call(name, args):
+        return llm.text_of(await by[name].ainvoke(args))
+
+    async def lookup_account() -> str:
+        """이번 VOC 등록자의 계정 정보(모의 DB). 없으면 found=false."""
+        return await call("lookup_account", {"user_id": registrant_id})
+
+    async def lookup_business_data(menu: str) -> str:
+        """이번 VOC 등록자의 해당 메뉴 업무 데이터(모의 DB).
+
+        Args:
+            menu: 등록 메뉴명
+        """
+        return await call("lookup_business_data", {"user_id": registrant_id, "menu": menu})
+
+    async def get_menu_count(menu: str) -> str:
+        """메뉴별 처리 가능 VOC 누적 건수.
+
+        Args:
+            menu: 등록 메뉴명
+        """
+        return await call("get_menu_count", {"menu": menu})
+
+    return [StructuredTool.from_function(coroutine=f, name=f.__name__)
+            for f in (lookup_account, lookup_business_data, get_menu_count)]
+
+
 async def _lookup(registrant_id, menus, history=None):
     from langchain.agents import create_agent
 
-    agent = create_agent(model=llm.chat_model(timeout=30), tools=await get_tools(LOOKUP_TOOLS),
+    tools = _bound_lookup_tools(await get_tools(LOOKUP_TOOLS), registrant_id)
+    agent = create_agent(model=llm.chat_model(timeout=30), tools=tools,
                          system_prompt=LOOKUP_PROMPT)
     out = await agent.ainvoke({"messages": [("user", _lookup_message(registrant_id, menus, history))]})
     return {"summary": llm.text_of(out["messages"][-1]).strip(),

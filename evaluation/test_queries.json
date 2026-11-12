@@ -47,6 +47,10 @@
    "text": "신입 직원 계정을 포털에서 쓸 수 있게 승인해 주세요",
    "expected_processable": true, "expected_menus": ["사용자 관리"],
    "note": "사용자 관리 description: 사용자 승인"},
+  {"id": "P13", "category": "paraphrase", "registrant_id": "u001",
+   "text": "어제까지 시스템 사용에 문제가 없었는데, 오늘은 사용이 안되요.",
+   "expected_processable": true, "expected_menus": ["사용자 관리"],
+   "note": "라운드3부터 추가(2026-11-12 UI 테스트). 시스템명이 없으면 이 포털로 본다. 사용자 관리 includes: 포털 사용·접속 불가 문의"},
 
   {"id": "L01", "category": "lookalike", "registrant_id": "u001",
    "text": "회사 노트북 윈도우 업데이트가 계속 실패하고 재부팅이 반복돼요",
@@ -80,6 +84,10 @@
    "text": "OTP 인증 앱을 새 휴대폰으로 옮기고 싶어요",
    "expected_processable": false, "expected_menus": [],
    "note": "사용자 관리 excludes: 통합인증(AD/MFA) 관련 문의"},
+  {"id": "L09", "category": "lookalike", "registrant_id": "u003",
+   "text": "결재 시스템이 오늘 아침부터 안 열려요",
+   "expected_processable": false, "expected_menus": [],
+   "note": "라운드3부터 추가. 다른 시스템명(결재 시스템)이 있으면 이 포털 업무가 아님"},
 
   {"id": "C01", "category": "rule_conflict", "registrant_id": "u003",
    "text": "서약서 관리 업무를 맡게 돼서 담당자 권한을 받고 싶습니다",

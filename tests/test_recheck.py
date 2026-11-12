@@ -88,3 +88,14 @@ def test_no_recheck_without_keyword(conn, llm_on):
 def test_rule_mode_keeps_rule_result(conn):
     r = process_voc(conn, AD_VOC, "u001", menus=MENUS)  # conftest: LLM 미사용
     assert r["is_processable"] and r["matched_menus"] == ["사용자 관리"]
+
+
+def test_judge_prompt_reads_unnamed_system_as_this_portal():
+    """VOC는 이 포털의 창구로 접수되므로, 시스템명이 없으면 이 포털로 본다(2026-11-12 사용자 기준)."""
+    assert "시스템명이 없으면" in agent.JUDGE_PROMPT and "이 포털" in agent.JUDGE_PROMPT
+
+
+def test_user_management_accepts_portal_access_problems():
+    um = {m["name"]: m for m in load_menus()}["사용자 관리"]["scope"]
+    assert any("사용·접속 불가" in x for x in um["includes"])
+    assert any("AD/MFA" in x for x in um["excludes"])  # 통합인증은 계속 제외

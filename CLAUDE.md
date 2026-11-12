@@ -23,6 +23,7 @@
 - 범위 외 금지: 화면 메뉴 편집, 발표 자료 등. 문서는 README.md, SERVICE.md, 기대값표(`data/sample_vocs_expected.csv`), 평가 폴더(`evaluation/`: 과제 기준·설계·계획·인-아웃 세트·라운드 리포트)만.
 - 평가 개선은 판정 쪽(에이전트·검색·가드레일)에서만. 별칭 추가나 평가 정답·`seed_history.csv` 변경으로 점수를 올리지 않음.
 - 개인정보는 그래프 실행 전(`run_voc`)에 가림: LangSmith가 그래프 입력을 기록하기 때문.
+- 조회 에이전트 도구는 등록자 ID가 코드에서 고정된 래퍼(`_bound_lookup_tools`)로만 준다. LLM에 user_id 인자를 열어 두지 말 것(ID를 임의로 고쳐 다른 사람을 조회한 사례 있음).
 
 ## 개발 워크플로우 (Ouroboros)
 
