@@ -28,3 +28,6 @@ data/chroma/
 
 # Evaluation scratch (temp DB/Chroma per round)
 evaluation/results/*_work/
+
+# 외부 UI/UX 스킬(nextlevelbuilder/ui-ux-pro-max-skill @6ae86f6, MIT) — 로컬 전용
+.claude/skills/ui-ux-pro-max/

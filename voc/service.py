@@ -52,6 +52,28 @@ def match_policy(voc_text, policies):
     return None
 
 
+def needs_recheck(voc_text, menus, matched):
+    """1차 규칙으로 매칭됐지만 재확인 키워드(recheck_terms)가 있어 에이전트가 다시 판단할 메뉴.
+
+    예: '접속'(사용자 관리 별칭)이 있어도 'AD'·'비밀번호'가 있으면 통합인증 문의일 수 있다.
+    영문 키워드는 단어 단위(대소문자 무시)로, 한글 키워드는 공백 무시 부분 문자열로 찾는다.
+    """
+    text = normalize(voc_text)
+    out = []
+    for m in menus:
+        if m["name"] not in matched:
+            continue
+        for t in m.get("recheck_terms", []):
+            if t.isascii():
+                hit = re.search(rf"(?<![A-Za-z]){re.escape(t)}(?![A-Za-z])", voc_text or "", re.I)
+            else:
+                hit = normalize(t) in text
+            if hit:
+                out.append(m["name"])
+                break
+    return out
+
+
 def _bigrams(text):
     t = normalize(text)
     return {t[i:i + 2] for i in range(len(t) - 1)} if len(t) > 1 else {t} - {""}

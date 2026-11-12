@@ -7,6 +7,7 @@ validate ─(빈 입력)→ END
  policy_check ─(정책 해당: 해외 법인 등)→ 고정 문구로 record (LLM 미호출)
    │
  rule_match ─(메뉴명 있음)──────────────→ record
+   │  └(메뉴명 있음 + 재확인 키워드, LLM 사용)→ agent_judge(오류면 1차 결과로 record)
    │(없음)
    ├─(LLM 사용)→ agent_judge ─(오류)→ similar_fallback
    └─(LLM 미사용)────────────────────→ similar_fallback
@@ -24,8 +25,8 @@ from .db import load_menus, load_policies
 from .guidance import department_hints, generate_guidance_with_source
 from .pii import mask_pii
 from .service import (FREQUENT_THRESHOLD, bigram_scorer, find_similar_history, find_similar_voc,
-                      get_menu_counts, lookup_mock_db, match_menus, match_policy, save_voc,
-                      validate_input)
+                      get_menu_counts, lookup_mock_db, match_menus, match_policy, needs_recheck,
+                      save_voc, validate_input)
 
 
 class VocState(TypedDict, total=False):
@@ -38,6 +39,7 @@ class VocState(TypedDict, total=False):
     similar: Optional[dict]
     judge: Optional[dict]
     agent_error: Optional[str]
+    recheck: list
     policy: Optional[dict]
     guidance: Optional[str]
     guidance_source: Optional[str]
@@ -86,13 +88,18 @@ def build_graph(conn, menus, llm_on, policies=None):
 
     def rule_match(s):
         matched = match_menus(s["voc_text"], menus)
+        # 재확인 키워드가 있으면(예: 사용자 관리 + AD) 바로 접수하지 않고 에이전트가 다시 판단
+        recheck = needs_recheck(s["voc_text"], menus, matched) if (matched and llm_on) else []
         return {"matched": matched, "match_source": "menu" if matched else None,
-                "steps": step(s, "rule_match")}
+                "recheck": recheck, "steps": step(s, "rule_match")}
 
     def agent_judge(s):
         r = agent.judge_voc(s["voc_text"])
         if "error" in r:
-            return {"agent_error": r["error"], "steps": step(s, "agent_judge")}
+            if s.get("recheck"):  # 재확인 중 오류: 1차 규칙 결과를 그대로 쓴다
+                return {"agent_error": r["error"], "steps": step(s, "agent_judge")}
+            return {"agent_error": r["error"], "matched": [], "match_source": None,
+                    "steps": step(s, "agent_judge")}
         menus_ok = [m for m in dict.fromkeys(r["menus"]) if m in names]  # 등록 메뉴만 인정
         matched = menus_ok if r["processable"] else []
         return {"matched": matched, "match_source": "agent" if matched else None,
@@ -149,12 +156,13 @@ def build_graph(conn, menus, llm_on, policies=None):
                             ["record", "rule_match"])
     g.add_conditional_edges(
         "rule_match",
-        lambda s: "record" if s["matched"] else ("agent_judge" if llm_on else "similar_fallback"),
+        lambda s: ("agent_judge" if s.get("recheck") else "record") if s["matched"]
+        else ("agent_judge" if llm_on else "similar_fallback"),
         ["record", "agent_judge", "similar_fallback"])
     g.add_conditional_edges(
         "agent_judge",
-        lambda s: "similar_fallback" if s.get("agent_error")
-        else ("record" if s["matched"] else "guidance"),
+        lambda s: "record" if s.get("matched")
+        else ("similar_fallback" if s.get("agent_error") else "guidance"),
         ["similar_fallback", "record", "guidance"])
     g.add_conditional_edges("similar_fallback",
                             lambda s: "record" if s["matched"] else "guidance",

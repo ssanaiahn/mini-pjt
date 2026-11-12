@@ -1,0 +1,27 @@
+# VOC 접수 판단·응답 보조 테마
+# 디자인 기준: UI/UX Pro Max 추천 "Minimalism & Swiss Style"(업무용 도구·대시보드) + 청록 팔레트.
+# - primaryColor는 추천 #0D9488보다 한 단계 진하게(#0F766E): 흰 버튼 글자 대비 4.5:1 이상
+# - 추천 글꼴 Atkinson Hyperlegible은 한글 글리프가 없어 가독성 중심의 Noto Sans KR 사용
+[theme]
+base = "light"
+primaryColor = "#0F766E"
+linkColor = "#0F766E"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0FDFA"
+textColor = "#134E4A"
+borderColor = "#CCE7E3"
+font = "'Noto Sans KR':https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap"
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+baseRadius = "medium"
+redColor = "#DC2626"
+orangeColor = "#B45309"
+greenColor = "#047857"
+blueColor = "#0F766E"
+dataframeHeaderBackgroundColor = "#F0FDFA"
+dataframeHeaderTextColor = "#134E4A"
+
+[theme.sidebar]
+backgroundColor = "#F0FDFA"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#134E4A"
+borderColor = "#CCE7E3"
