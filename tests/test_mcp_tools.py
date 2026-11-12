@@ -22,6 +22,13 @@ def db(tmp_path, monkeypatch):
     return name
 
 
+def test_list_menus_includes_scope(db):
+    by = {m["name"]: m for m in json.loads(tools.list_menus())}
+    sc = by["정보보호 규정"]["scope"]
+    assert "사외 메일 발신 프로세스" in sc["excludes"] and sc["description"]
+    assert "받지 않는 요청" in agent.JUDGE_PROMPT and "scope" in agent.JUDGE_PROMPT
+
+
 def test_tool_functions(db):
     assert db in [m["name"] for m in json.loads(tools.list_menus())]
     assert json.loads(tools.get_menu_count(db)) == {"menu": db, "count": 1}

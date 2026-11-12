@@ -75,6 +75,19 @@ def test_ac6_success_uses_model_text_and_reason(monkeypatch):
     assert state["created"] == [10]
 
 
+def test_guidance_prompt_forbids_promise_and_uses_hints(monkeypatch):
+    msg = types.SimpleNamespace(content="안내")
+    state = _fake_model(monkeypatch, lambda p: msg)
+    guidance.generate_guidance_with_source("출입증 분실", hints=["출입카드 분실 (총무팀)"])
+    prompt = state["calls"][0]
+    assert "출입카드 분실 (총무팀)" in prompt and "약속" in prompt
+
+
+def test_department_hints_only_with_department():
+    menus = [{"name": "a", "scope": {"excludes": ["x (총무팀)", "y"]}}, {"name": "b"}]
+    assert guidance.department_hints(menus) == ["x (총무팀)"]
+
+
 def test_ac6_empty_model_text_is_error(monkeypatch):
     _fake_model(monkeypatch, lambda p: types.SimpleNamespace(content="  "))
     assert guidance.generate_guidance_with_source("x")[1] == "template_error"

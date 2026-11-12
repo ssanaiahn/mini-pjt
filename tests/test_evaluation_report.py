@@ -1,7 +1,7 @@
 """라운드 리포트 렌더링과 CLI 진입 조건(네트워크 없음)."""
 from evaluation import report, run_eval
 
-INFO = {"date": "2026-11-12", "model": "m", "cases": 2, "repeats": 3,
+INFO = {"date": "2026-11-12", "model": "m", "region": "us-west-2", "cases": 2, "repeats": 3,
         "langsmith_project": "voc-eval-round1", "commit": "abc1234", "ragas_method": "claude"}
 
 
@@ -33,7 +33,7 @@ def test_render_report_sections():
     md = report.render_report(1, INFO, summary(), JUDGES, prev=None)
     for i, title in enumerate(report.SECTIONS, start=1):
         assert f"## {i}. {title}" in md
-    assert "C02" in md and "규칙 단계" in md and "abc1234" in md
+    assert "C02" in md and "규칙 단계" in md and "abc1234" in md and "us-west-2" in md
     assert "❌" in md and "✅" in md
 
 

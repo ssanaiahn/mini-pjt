@@ -80,6 +80,7 @@ def main(argv=None):
     old = report_path.read_text(encoding="utf-8") if report_path.exists() else None
     info = {"date": date.today().isoformat(),
             "model": os.environ.get("VOC_BEDROCK_MODEL") or llm.CHAT_MODEL,
+            "region": os.environ.get("VOC_EVAL_REGION_NOTE") or llm.region(),
             "cases": len(cases), "repeats": args.repeats,
             "langsmith_project": os.environ["LANGSMITH_PROJECT"], "commit": _git_version(),
             "ragas_method": "RAGAS와 같은 정의로 직접 계산 (context precision: 정답 메뉴 기준, "

@@ -21,7 +21,7 @@ from langgraph.graph import END, START, StateGraph
 
 from . import agent, llm
 from .db import load_menus, load_policies
-from .guidance import generate_guidance_with_source
+from .guidance import department_hints, generate_guidance_with_source
 from .pii import mask_pii
 from .service import (FREQUENT_THRESHOLD, find_similar_voc, get_menu_counts, lookup_mock_db,
                       match_menus, match_policy, save_voc, validate_input)
@@ -95,7 +95,8 @@ def build_graph(conn, menus, llm_on, policies=None):
 
     def guidance(s):
         reason = (s.get("judge") or {}).get("reason")
-        text, source = generate_guidance_with_source(s["voc_text"], use_api=llm_on, reason=reason)
+        text, source = generate_guidance_with_source(s["voc_text"], use_api=llm_on, reason=reason,
+                                                     hints=department_hints(menus))
         return {"guidance": text, "guidance_source": source, "steps": step(s, "guidance")}
 
     def record(s):

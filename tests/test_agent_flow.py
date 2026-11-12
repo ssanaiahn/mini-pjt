@@ -27,7 +27,7 @@ def llm_on(monkeypatch):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "dummy")
     calls = {"judge": [], "lookup": [], "guidance": []}
 
-    def guidance(text, use_api=True, reason=None):
+    def guidance(text, use_api=True, reason=None, hints=None):
         calls["guidance"].append(reason)
         return "에이전트 안내", "claude"
     monkeypatch.setattr("voc.graph.generate_guidance_with_source", guidance)
@@ -143,6 +143,31 @@ def test_graph_input_is_masked(conn, monkeypatch, llm_on):
     assert "010-1234-5678" not in captured[0]["voc_text"]
     assert "[전화번호]" in captured[0]["voc_text"]
     assert r["pii_found"] == ["전화번호"]
+
+
+@pytest.mark.parametrize("text, masked", [
+    ("010-2345-6789로 연락 주세요", "[전화번호]로 연락 주세요"),
+    ("회신은 kim.minsu@example.com으로 부탁", "회신은 [이메일]으로 부탁"),
+    ("주민 900101-1234567이고요", "주민 [주민번호]이고요"),
+    ("번호 0101234567890123은 계좌", "번호 0101234567890123은 계좌"),  # 더 긴 숫자열 일부는 안 가림
+])
+def test_mask_pii_with_korean_particles(text, masked):
+    assert mask_pii(text)[0] == masked
+
+
+def test_graph_passes_department_hints_to_guidance(conn, monkeypatch, llm_on):
+    seen = {}
+
+    def guidance(text, use_api=True, reason=None, hints=None):
+        seen["hints"] = hints
+        return "안내", "claude"
+    monkeypatch.setattr("voc.graph.generate_guidance_with_source", guidance)
+    set_judge(monkeypatch, llm_on, {"processable": False, "menus": [], "reason": "-",
+                                    "similar_voc_ids": [], "tool_calls": []})
+    menus = [{"name": "보안 신고", "aliases": [],
+              "scope": {"excludes": ["출입카드 분실 (총무팀)", "부서 없음"]}}]
+    process_voc(conn, "출입증 분실", "u001", menus=menus)
+    assert seen["hints"] == ["출입카드 분실 (총무팀)"]
 
 
 def test_mask_pii_patterns():

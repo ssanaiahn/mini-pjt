@@ -84,6 +84,7 @@ def render_report(round_no, info, summary, judges, prev=None, notes=None):
     L += [f"## 1. {SECTIONS[0]}", "",
           "| 항목 | 값 |", "|---|---|",
           f"| 날짜 | {info['date']} |", f"| 모델 | `{info['model']}` |",
+          f"| 리전 | {info.get('region', '-')} |",
           f"| 케이스 수 × 반복 | {info['cases']} × {info['repeats']} |",
           f"| LangSmith 프로젝트 | `{info['langsmith_project']}` |",
           f"| 코드 버전 | `{info['commit']}` |",

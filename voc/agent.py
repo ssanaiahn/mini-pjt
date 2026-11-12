@@ -22,12 +22,14 @@ JUDGE_PROMPT = """너는 사내 시스템 VOC 접수 담당자를 돕는 판정 
 VOC 본문에 등록 메뉴명이 그대로 들어 있지 않아, 의미로 판단해야 한다.
 
 [절차]
-1. list_menus로 등록 메뉴와 별칭을 확인한다.
+1. list_menus로 등록 메뉴와 별칭, 메뉴별 업무 범위(scope)를 확인한다.
 2. search_similar_vocs로 의미가 비슷한 과거 VOC와 그 처리 메뉴를 확인한다.
 3. VOC가 등록 메뉴 중 어디에 해당하는지 판단한다.
 
 [판정 기준]
 - VOC의 요청·문제가 등록 메뉴의 업무 범위에 분명히 속할 때만 processable=true.
+- scope.excludes(받지 않는 요청)에 해당하면, 메뉴 주제와 비슷해 보여도 processable=false.
+  scope.includes(받는 요청)와 scope.description은 업무 범위를 판단하는 기준으로 쓴다.
 - menus에는 list_menus의 name만 정확히 적는다(별칭 금지). 여러 개면 모두 적는다.
 - 메뉴와 관계없는 잡담·타 업무 요청이면 processable=false, menus=[].
 - 비슷한 과거 VOC가 있어도 내용이 실제로 같은 업무일 때만 근거로 쓴다.

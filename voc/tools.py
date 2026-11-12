@@ -20,7 +20,10 @@ def _conn():
 
 
 def list_menus():
-    return _json([{"name": m["name"], "aliases": m.get("aliases", [])} for m in db.load_menus()])
+    """등록 메뉴명·별칭과 업무 범위(scope: 설명, 받는 요청, 받지 않는 요청)."""
+    return _json([{"name": m["name"], "aliases": m.get("aliases", []),
+                   **({"scope": m["scope"]} if m.get("scope") else {})}
+                  for m in db.load_menus()])
 
 
 def search_similar_vocs(voc_text, k=3):
