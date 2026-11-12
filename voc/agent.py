@@ -38,7 +38,10 @@ VOC 본문에 등록 메뉴명이 그대로 들어 있지 않아, 의미로 판�
 LOOKUP_PROMPT = """너는 VOC 접수 담당자를 돕는 조회 에이전트다.
 같은 메뉴의 VOC가 반복 접수되었다. 도구로 등록자 계정과 해당 메뉴의 업무 데이터, 누적 건수를
 조회한 뒤, 담당자가 바로 조치할 수 있게 한국어로 3줄 이내 요약을 쓴다.
-도구 결과에 있는 내용만 쓰고, 등록자 정보가 없으면 없다고 쓴다."""
+도구 결과에 있는 내용만 쓰고, 등록자 정보가 없으면 없다고 쓴다.
+[유사 VOC 처리 이력]이 주어지면 비슷한 과거 VOC가 언제 어떻게 처리됐는지 인용하고,
+그 처리 방식을 참고한 조치를 권한다(같은 등록자의 재요청이면 그 점을 먼저 쓴다).
+"(모의)" 표시가 있는 처리 내용은 모의 데이터라고 밝힌다."""
 
 
 class JudgeResult(BaseModel):
@@ -143,13 +146,23 @@ async def _judge(voc_text):
             "tool_results": tool_results, "retrieved": _retrieved(tool_results)}
 
 
-async def _lookup(registrant_id, menus):
+def _lookup_message(registrant_id, menus, history=None):
+    lines = [f"등록자 ID: {registrant_id}", f"반복 접수 메뉴: {', '.join(menus)}"]
+    if history:
+        lines.append("[유사 VOC 처리 이력]")
+        for h in history:
+            who = "같은 등록자" if h.get("same_registrant") else h.get("registrant_id")
+            lines.append(f"- {(h.get('created_at') or '')[:10]} ({who}, 유사도 {h.get('similarity')}): "
+                         f"{h.get('voc_text')} → 처리: {h.get('handling_note') or '처리 기록 없음'}")
+    return "\n".join(lines)
+
+
+async def _lookup(registrant_id, menus, history=None):
     from langchain.agents import create_agent
 
     agent = create_agent(model=llm.chat_model(timeout=30), tools=await get_tools(LOOKUP_TOOLS),
                          system_prompt=LOOKUP_PROMPT)
-    out = await agent.ainvoke({"messages": [(
-        "user", f"등록자 ID: {registrant_id}\n반복 접수 메뉴: {', '.join(menus)}")]})
+    out = await agent.ainvoke({"messages": [("user", _lookup_message(registrant_id, menus, history))]})
     return {"summary": llm.text_of(out["messages"][-1]).strip(),
             "tool_calls": _tool_calls(out["messages"])}
 
@@ -167,6 +180,6 @@ def judge_voc(voc_text):
     return _run(_judge(voc_text))
 
 
-def summarize_frequent(registrant_id, menus):
-    """{"summary", "tool_calls"} 또는 {"error"}."""
-    return _run(_lookup(registrant_id, menus))
+def summarize_frequent(registrant_id, menus, history=None):
+    """{"summary", "tool_calls"} 또는 {"error"}. history: 유사 VOC 처리 이력(find_similar_history)."""
+    return _run(_lookup(registrant_id, menus, history))

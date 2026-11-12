@@ -28,11 +28,12 @@ AWS_DEFAULT_REGION=us-east-1
 ```bash
 streamlit run app.py
 ```
-1. VOC 본문과 등록자 ID(예: `u001`~`u006`)를 입력하고 제출합니다.
+1. VOC 본문과 등록자 ID(모의 사용자: `u001`~`u006`, `가나다`, `나라바`, `라마바`, `사아자`, `마바사`, `가다마`, `abc`, 시연용 20명 `def`·`ghi`·`aaa`·`다나가`·`아차파` 등. 전체 목록은 `voc/db.py`의 `MOCK_USERS`)를 입력하고 제출합니다.
 2. 화면에 다음이 표시됩니다.
    - 판정 결과
    - 판정 방식과 근거, 에이전트가 사용한 도구, 처리 경로
    - 처리 불가 시 안내 문구
+   - 처리 가능 시 같은 메뉴의 비슷한 과거 VOC와 처리 내용(유사 VOC 처리 이력, 처리 내용은 "(모의)")
    - 누적 3회 이상 시 조회 결과와 조회 에이전트 요약
 3. 데이터는 `data/voc.db`(SQLite)에 저장되어 재시작해도 유지됩니다. 초기화하려면 앱을 끄고 `data/voc.db`와 `data/chroma/`를 지우세요.
 
@@ -54,6 +55,8 @@ python -m evaluation.run_eval --round 1
 - 평가용 임시 DB와 과거 이력(`evaluation/seed_history.csv`)을 쓰며, `data/voc.db`는 건드리지 않습니다.
 - 토큰을 씁니다. 한도에 걸리면 같은 명령을 다시 실행해 이어서 진행합니다.
 - 트레이스는 LangSmith 프로젝트 `voc-eval-round1`에 남습니다.
+- 평가는 기본으로 Bedrock **us-west-2** 리전에서 실행합니다(강의 공용 계정의 한도 분산). 바꾸려면 `VOC_EVAL_REGION`을 지정하세요. 앱은 `.env`의 리전을 그대로 씁니다.
+- 라운드끼리 비교할 수 있도록 평가 모델은 기본 모델(Sonnet 4.6)로 고정됩니다. `.env`에서 앱 모델(`VOC_BEDROCK_MODEL`)을 바꿔도 평가에는 영향이 없고, 평가 모델을 바꾸려면 `VOC_EVAL_MODEL`을 지정하세요.
 
 ## 설정
 메뉴명·별칭은 `config/menus.json`에서 정의합니다(화면 편집 기능 없음).

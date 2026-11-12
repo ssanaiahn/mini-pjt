@@ -101,7 +101,8 @@ def summarize(cases, records, repeats, registered):
         maj = majority(recs)
         # 정상 실행이 하나도 없으면 채점하지 않는다(None → 비율 계산에서 빠지고 미완료로만 표시)
         correct = is_correct(c, maj) if ok else None
-        stable = (len(ok) == repeats and len({outcome(r) for r in ok}) == 1) if ok else None
+        # 정상 실행이 2회 이상일 때만 판단(한도 오류로 빠진 실행은 미완료로만 표시)
+        stable = len({outcome(r) for r in ok}) == 1 if len(ok) >= 2 else None
         if c.get("checks") and ok:
             guard_detail[c["id"]] = check_guardrails(c, recs, registered)
         if c["expected_processable"]:
@@ -114,7 +115,9 @@ def summarize(cases, records, repeats, registered):
             "stable": stable, "judge_reason": next((r.get("judge_reason") for r in ok
                                                     if r.get("judge_reason")), None),
             "match_source": next((r.get("match_source") for r in ok), None),
-            "root_cause_hint": _root_cause(c, recs, correct)})
+            "root_cause_hint": _root_cause(c, recs, correct),
+            # 처리 여부만의 다수결(메뉴가 갈려 결과 다수결이 없어도 오접수는 잡는다)
+            "accepted": (sum(r["processable"] for r in ok) > len(ok) / 2) if ok else None})
     cats = list(dict.fromkeys(c["category"] for c in cases))
     neg = [p for p in per_case if not p["expected"][0]]
     ok_all = _ok(records)
@@ -122,8 +125,7 @@ def summarize(cases, records, repeats, registered):
         "overall_accuracy": _rate(p["correct"] for p in per_case),
         "agent_accuracy": _rate(p["correct"] for p in per_case if p["category"] in AGENT_CATEGORIES),
         "by_category": {k: _rate(p["correct"] for p in per_case if p["category"] == k) for k in cats},
-        "false_accept": _rate(bool(p["majority"] and p["majority"][0]) for p in neg
-                              if p["correct"] is not None),
+        "false_accept": _rate(p["accepted"] for p in neg),
         "stability": _rate(p["stable"] for p in per_case),
         "context_precision_avg": round(mean(cps), 3) if cps else None,
         "guardrail_pass_rate": _rate(v for d in guard_detail.values() for v in d.values()),

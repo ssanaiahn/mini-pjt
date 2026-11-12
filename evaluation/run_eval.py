@@ -18,6 +18,7 @@ from . import dataset, judges, metrics, report, runner
 
 DIR = Path(__file__).resolve().parent
 RESULTS = DIR / "results"
+EVAL_REGION = "us-west-2"
 
 
 def _git_version():
@@ -45,6 +46,10 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     llm.load_env()
+    # 강의 안내: 평가는 us-west-2에서 실행(공용 계정의 모델 한도 분산). VOC_EVAL_REGION으로 변경 가능.
+    os.environ["AWS_DEFAULT_REGION"] = os.environ.get("VOC_EVAL_REGION") or EVAL_REGION
+    # 라운드 간 비교를 위해 평가 모델은 코드 기본값으로 고정(.env의 앱용 모델 설정과 별개).
+    os.environ["VOC_BEDROCK_MODEL"] = os.environ.get("VOC_EVAL_MODEL") or llm.CHAT_MODEL
     os.environ["VOC_USE_LLM"] = "1"
     if not llm.llm_enabled():
         print("LLM을 사용할 수 없습니다: .env의 AWS 자격 증명을 확인하세요.", file=sys.stderr)
@@ -57,15 +62,13 @@ def main(argv=None):
     results_path = RESULTS / f"round{n}.jsonl"
     only = {s.strip() for s in args.only.split(",") if s.strip()} or None
 
-    cases = dataset.load_queries()
-    if only:
-        cases = [c for c in cases if c["id"] in only]
+    cases = dataset.load_queries()  # 요약·리포트는 항상 라운드 전체 케이스로
     base = runner.prepare_base(work, dataset.load_seed())
-    if args.report_only:
-        wanted = {c["id"] for c in cases}
-        records = [r for r in runner.load_records(results_path) if r["case_id"] in wanted]
-    else:
-        records = runner.run_all(cases, args.repeats, n, results_path, work, base)
+    if not args.report_only:  # --only는 실행할 케이스만 고른다
+        runner.run_all([c for c in cases if not only or c["id"] in only], args.repeats, n,
+                       results_path, work, base)
+    wanted = {c["id"] for c in cases}
+    records = [r for r in runner.load_records(results_path) if r["case_id"] in wanted]
 
     registered = {m["name"] for m in load_menus()}
     summary = metrics.summarize(cases, records, args.repeats, registered)
@@ -90,6 +93,8 @@ def main(argv=None):
     print(f"리포트: {report_path}")
     if summary["llm_errors"] or jr["errors"]:
         print(f"주의: 한도/오류 {summary['llm_errors']}건, 채점 오류 {jr['errors']}건 → 같은 명령으로 다시 실행하세요.")
+        for m in jr.get("error_messages", []):
+            print("  -", m)
     return 0
 
 

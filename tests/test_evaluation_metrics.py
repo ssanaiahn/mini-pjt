@@ -101,6 +101,21 @@ def test_cases_without_ok_runs_are_not_scored():
     assert {p["id"]: p["correct"] for p in s["per_case"]}["G01"] is None
 
 
+def test_false_accept_uses_processable_majority():
+    """다수결이 없어도 3회 중 2회가 처리 가능이면 오접수(최종 리뷰 #4)."""
+    neg = case("L01", "lookalike", False, [])
+    rs = [rec("L01", 1, True, ["보안 신고"]), rec("L01", 2, True, ["사용자 관리"]),
+          rec("L01", 3, False, [])]
+    assert m.summarize([neg], rs, repeats=3, registered=REG)["false_accept"] == 1.0
+
+
+def test_error_run_does_not_make_case_unstable():
+    """정상 2회가 같고 1회가 한도 오류면 불안정이 아니라 미완료(최종 리뷰 #5)."""
+    rs = [rec("P01", 1), rec("P01", 2), rec("P01", 3, status="llm_error")]
+    s = m.summarize([case()], rs, repeats=3, registered=REG)
+    assert s["stability"] == 1.0 and s["incomplete_cases"] == ["P01"]
+
+
 def test_summarize_counts_errors_and_incomplete():
     s = m.summarize([case()], [rec(), rec(repeat=2, status="llm_error")], repeats=3,
                     registered=REG)

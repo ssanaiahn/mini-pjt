@@ -83,6 +83,11 @@ def test_guidance_prompt_forbids_promise_and_uses_hints(monkeypatch):
     assert "출입카드 분실 (총무팀)" in prompt and "약속" in prompt
 
 
+def test_template_makes_no_promise():
+    """가드레일 6: 처리·전달 약속 금지(규칙 모드 템플릿도 같음)."""
+    assert "전달" not in guidance.TEMPLATE and "드리겠습니다" not in guidance.TEMPLATE
+
+
 def test_department_hints_only_with_department():
     menus = [{"name": "a", "scope": {"excludes": ["x (총무팀)", "y"]}}, {"name": "b"}]
     assert guidance.department_hints(menus) == ["x (총무팀)"]

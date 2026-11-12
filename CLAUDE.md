@@ -6,14 +6,15 @@
 - 실행: `streamlit run app.py`
 - 테스트: `python -m pytest -q` (conftest가 `VOC_USE_LLM=0`으로 Bedrock 미호출, 임시 DB 사용)
 - MCP 서버 단독 실행: `python -m voc.mcp_server`
-- 라운드 평가(실제 Bedrock, 토큰 사용): `python -m evaluation.run_eval --round N` → `evaluation/roundN_report.md`. 설계 `evaluation/design.md`, 계획 `evaluation/plan.md`
+- 라운드 평가(실제 Bedrock, 토큰 사용): `python -m evaluation.run_eval --round N` → `evaluation/roundN_report.md`. 설계 `evaluation/design.md`, 계획 `evaluation/plan.md`. 평가는 기본 us-west-2 리전(강의 안내: 공용 계정 한도 분산, `VOC_EVAL_REGION`으로 변경), 모델은 `llm.CHAT_MODEL`(Sonnet 4.6)로 고정(`.env`의 앱용 `VOC_BEDROCK_MODEL`과 별개, `VOC_EVAL_MODEL`로 변경)
 
 ## 규칙
-- 정책(1차보다 먼저): `config/menus.json`의 `policies` 표현(예: 해외 법인, 현지 법인, 해외 임직원)이 본문에 있으면 처리 불가 + 고정 문구로 종료(LLM 미호출, match_source='policy'). 국내 임직원 전용 포털이라 해외 법인 임직원 사용·해외 법인 접속 불가. "해외 출장"처럼 법인 언급 없는 문의는 막지 않음.
+- 정책(1차보다 먼저): `config/menus.json`의 `policies` 표현(예: 해외 법인, 현지 법인, 해외 지사, "미국 법인" 같은 국가+법인)이 있고 **접속·사용·승인·권한·계정 요청어도 함께 있으면** 처리 불가 + 고정 문구로 종료(LLM 미호출, match_source='policy'). 해외 법인 관련 보안 신고·개선 제안은 막지 않음. 국내 임직원 전용 포털이라 해외 법인 임직원 사용·해외 법인 접속 불가. "해외 출장"처럼 법인 언급 없는 문의는 막지 않음.
 - 1차: 본문에 메뉴명/별칭 부분 문자열이 있으면 처리 가능. 다중 매칭 시 각 메뉴 누적 +1.
 - 2차(LLM 사용 시): 판정 에이전트(create_agent + ToolStrategy(JudgeResult))가 MCP `list_menus`·로컬 `search_similar_vocs`(Titan+Chroma)로 판정. 미등록 메뉴는 버림. 오류 시 3차.
 - 3차: 과거 메뉴명 판정 VOC와 bigram 자카드 유사도 ≥ 0.5인 최유사 건의 메뉴를 차용. 2·3차 비교 기준은 match_source='menu' 건만.
 - 처리 불가 건은 이력만 저장, 누적 제외. 누적(등록자 무관) 3 이상이면 모의 DB 조회 + 조회 에이전트 요약.
+- 처리 가능 건은 저장 뒤 `history` 단계에서 같은 메뉴의 비슷한 과거 처리 가능 VOC(최대 5건, Titan 임베딩 코사인 ≥ 0.3, LLM 미사용·오류 시 bigram ≥ 0.2)와 처리 내용을 보여주고, 조회 에이전트 요약도 이를 인용. 처리 내용은 실제 기록이 없어 `backfill_mock_handling`이 앱 실행 때 "(모의)" 메뉴별 문구로 채움(판정 근거로는 쓰지 않음).
 - 안내 문구: LLM 사용 가능하면 Bedrock Claude(10초 타임아웃), 실패·미설정이면 템플릿.
 - 개인정보(주민번호·전화·이메일)는 저장·LLM 전달 전에 가림.
 - `search_similar_vocs`는 MCP 서버(stdio) 안에서 임베딩·Chroma가 응답하지 않아 로컬 도구로 둠. MCP로 옮기지 말 것.

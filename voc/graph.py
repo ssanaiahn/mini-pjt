@@ -12,8 +12,8 @@ validate ─(빈 입력)→ END
    └─(LLM 미사용)────────────────────→ similar_fallback
  agent_judge / similar_fallback ─(처리 가능)→ record
                                  └(처리 불가)→ guidance → record
- record ─(누적 3 이상)→ lookup → END
-        └──────────────────────→ END
+ record ─(처리 가능)→ history(유사 과거 VOC·처리 내용) ─(누적 3 이상)→ lookup → END
+        └(처리 불가)→ END                                   └──────────────→ END
 """
 from typing import Any, Optional, TypedDict
 
@@ -23,8 +23,9 @@ from . import agent, llm
 from .db import load_menus, load_policies
 from .guidance import department_hints, generate_guidance_with_source
 from .pii import mask_pii
-from .service import (FREQUENT_THRESHOLD, find_similar_voc, get_menu_counts, lookup_mock_db,
-                      match_menus, match_policy, save_voc, validate_input)
+from .service import (FREQUENT_THRESHOLD, bigram_scorer, find_similar_history, find_similar_voc,
+                      get_menu_counts, lookup_mock_db, match_menus, match_policy, save_voc,
+                      validate_input)
 
 
 class VocState(TypedDict, total=False):
@@ -47,7 +48,16 @@ class VocState(TypedDict, total=False):
     account: Any
     business: list
     lookup_summary: Optional[dict]
+    similar_history: list
     steps: list
+
+
+def history_scorer(llm_on):
+    """유사 VOC 처리 이력의 유사도: LLM 사용 시 Titan 임베딩, 아니면 글자 유사도."""
+    if llm_on:
+        from .vectorstore import embedding_scorer
+        return embedding_scorer
+    return bigram_scorer
 
 
 def build_graph(conn, menus, llm_on, policies=None):
@@ -112,9 +122,15 @@ def build_graph(conn, menus, llm_on, policies=None):
         return {"voc_id": voc_id, "created_at": created_at, "snapshot": snapshot,
                 "frequent": frequent, "steps": step(s, "record")}
 
+    def history(s):
+        h = find_similar_history(conn, s["voc_text"], s["matched"], exclude_id=s["voc_id"],
+                                 registrant_id=s["registrant_id"], scorer=history_scorer(llm_on))
+        return {"similar_history": h, "steps": step(s, "history")}
+
     def lookup(s):
         account, business = lookup_mock_db(conn, s["registrant_id"], s["frequent"])
-        summary = agent.summarize_frequent(s["registrant_id"], s["frequent"]) if llm_on else None
+        summary = (agent.summarize_frequent(s["registrant_id"], s["frequent"],
+                                            history=s.get("similar_history")) if llm_on else None)
         return {"account": account, "business": business, "lookup_summary": summary,
                 "steps": step(s, "lookup")}
 
@@ -122,7 +138,8 @@ def build_graph(conn, menus, llm_on, policies=None):
     for name, fn in [("validate", validate), ("guard", guard), ("policy_check", policy_check),
                      ("rule_match", rule_match),
                      ("agent_judge", agent_judge), ("similar_fallback", similar_fallback),
-                     ("guidance", guidance), ("record", record), ("lookup", lookup)]:
+                     ("guidance", guidance), ("record", record), ("history", history),
+                     ("lookup", lookup)]:
         g.add_node(name, fn)
     g.add_edge(START, "validate")
     g.add_conditional_edges("validate", lambda s: "guard" if s["input_validation"]["is_valid"]
@@ -143,7 +160,9 @@ def build_graph(conn, menus, llm_on, policies=None):
                             lambda s: "record" if s["matched"] else "guidance",
                             ["record", "guidance"])
     g.add_edge("guidance", "record")
-    g.add_conditional_edges("record", lambda s: "lookup" if s["frequent"] else END,
+    g.add_conditional_edges("record", lambda s: "history" if s.get("matched") else END,
+                            ["history", END])
+    g.add_conditional_edges("history", lambda s: "lookup" if s["frequent"] else END,
                             ["lookup", END])
     g.add_edge("lookup", END)
     return g.compile()
@@ -172,4 +191,5 @@ def run_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
             "similar_voc": s.get("similar"), "judge": s.get("judge"),
             "agent_error": s.get("agent_error"), "lookup_summary": s.get("lookup_summary"),
             "pii_found": s.get("pii_found") or [], "voc_text": s["voc_text"],
+            "similar_history": s.get("similar_history") or [],
             "mode": "llm" if llm_on else "rule", "steps": s["steps"]}

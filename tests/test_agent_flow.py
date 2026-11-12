@@ -5,7 +5,7 @@ from voc import agent
 from voc.db import connect, init_db
 from voc.graph import build_graph
 from voc.pii import mask_pii
-from voc.service import process_voc
+from voc.service import bigram_scorer, process_voc
 
 MENUS = [
     {"name": "보안 신고", "aliases": []},
@@ -31,8 +31,10 @@ def llm_on(monkeypatch):
         calls["guidance"].append(reason)
         return "에이전트 안내", "claude"
     monkeypatch.setattr("voc.graph.generate_guidance_with_source", guidance)
-    monkeypatch.setattr(agent, "summarize_frequent", lambda rid, menus: calls["lookup"].append(
+    monkeypatch.setattr(agent, "summarize_frequent", lambda rid, menus, history=None: calls["lookup"].append(
         (rid, menus)) or {"summary": "요약", "tool_calls": ["lookup_account"]})
+    # 유사 VOC 이력의 임베딩(Titan) 호출 대신 글자 유사도(네트워크 없음)
+    monkeypatch.setattr("voc.graph.history_scorer", lambda llm_on: bigram_scorer)
     return calls
 
 
@@ -51,7 +53,7 @@ def test_menu_match_skips_agent(conn, monkeypatch, llm_on):
     set_judge(monkeypatch, llm_on, {"error": "should not be called"})
     r = run(conn, "사용자 권한 신청이 안 돼요")
     assert r["match_source"] == "menu" and llm_on["judge"] == []
-    assert r["steps"] == ["validate", "guard", "policy_check", "rule_match", "record"]
+    assert r["steps"] == ["validate", "guard", "policy_check", "rule_match", "record", "history"]
 
 
 def test_agent_judges_processable(conn, monkeypatch, llm_on):
@@ -63,7 +65,7 @@ def test_agent_judges_processable(conn, monkeypatch, llm_on):
     assert r["matched_menus"] == ["사용자 관리"]  # 등록되지 않은 메뉴는 버림
     assert r["judge"]["tool_calls"] == ["list_menus", "search_similar_vocs"]
     assert r["count_snapshot"] == {"사용자 관리": 1}
-    assert r["steps"] == ["validate", "guard", "policy_check", "rule_match", "agent_judge", "record"]
+    assert r["steps"] == ["validate", "guard", "policy_check", "rule_match", "agent_judge", "record", "history"]
     row = conn.execute("SELECT match_source, judge_reason FROM voc_history").fetchone()
     assert tuple(row) == ("agent", "계정 잠금은 사용자 관리 업무")
 
@@ -150,6 +152,8 @@ def test_graph_input_is_masked(conn, monkeypatch, llm_on):
     ("회신은 kim.minsu@example.com으로 부탁", "회신은 [이메일]으로 부탁"),
     ("주민 900101-1234567이고요", "주민 [주민번호]이고요"),
     ("번호 0101234567890123은 계좌", "번호 0101234567890123은 계좌"),  # 더 긴 숫자열 일부는 안 가림
+    ("김철수@corp.com 으로 회신", "[이메일] 으로 회신"),  # 한글 아이디(최종 리뷰: R2 회귀)
+    ("문의는 홍길동@회사.kr로", "문의는 [이메일]로"),
 ])
 def test_mask_pii_with_korean_particles(text, masked):
     assert mask_pii(text)[0] == masked
@@ -181,4 +185,4 @@ def test_graph_structure(conn):
     g = build_graph(conn, MENUS, llm_on=True).get_graph()
     nodes = set(g.nodes) - {"__start__", "__end__"}
     assert nodes == {"validate", "guard", "policy_check", "rule_match", "agent_judge", "similar_fallback",
-                     "guidance", "record", "lookup"}
+                     "guidance", "record", "history", "lookup"}

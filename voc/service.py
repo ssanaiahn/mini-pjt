@@ -2,6 +2,7 @@
 
 전체 흐름은 voc/graph.py의 LangGraph가 이 함수들을 노드로 엮어 실행한다.
 """
+import re
 from datetime import datetime, timezone
 
 from .db import normalize, validate_menus
@@ -35,10 +36,18 @@ def match_menus(voc_text, menus):
 
 
 def match_policy(voc_text, policies):
-    """본문(공백 무시)에 정책 표현이 있으면 그 정책, 없으면 None. 1차 규칙보다 먼저 적용한다."""
+    """정책에 해당하면 그 정책, 아니면 None. 1차 규칙보다 먼저 적용한다.
+
+    patterns(공백 무시 부분 문자열) 또는 regex(원문 검색)가 맞고, require_any가 있으면
+    그중 하나(접속·사용·승인 등)도 본문에 있어야 한다. 그래서 해외 법인 관련 보안 신고나
+    개선 제안처럼 사용 요청이 아닌 문의는 막지 않는다.
+    """
     text = normalize(voc_text)
     for p in policies:
-        if any(normalize(t) and normalize(t) in text for t in p.get("patterns", [])):
+        hit = (any(normalize(t) and normalize(t) in text for t in p.get("patterns", []))
+               or any(re.search(rx, voc_text or "") for rx in p.get("regex", [])))
+        need = p.get("require_any") or []
+        if hit and (not need or any(normalize(t) in text for t in need)):
             return p
     return None
 
@@ -75,6 +84,49 @@ def find_similar_voc(conn, voc_text, threshold=SIMILARITY_THRESHOLD):
     if top and top[0]["score"] >= threshold:
         return {k: v for k, v in top[0].items() if k != "score"}
     return None
+
+
+HISTORY_K = 5
+HISTORY_THRESHOLD = 0.2  # 글자 유사도 기준(의미 검색 scorer는 자체 threshold 속성 사용)
+
+
+def bigram_scorer(query, texts):
+    """글자 2개 묶음 자카드 유사도 목록."""
+    return [similarity(query, t) for t in texts]
+
+
+bigram_scorer.threshold = HISTORY_THRESHOLD
+
+
+def find_similar_history(conn, voc_text, menus, exclude_id=None, registrant_id=None,
+                         k=HISTORY_K, scorer=None):
+    """같은 메뉴로 접수된 과거 VOC 중 내용이 비슷한 건(처리 내용 포함), 유사도 높은 순 최대 k건.
+
+    판정 근거가 아니라 담당자 참고용이므로 판정 방식(menu/agent/similar)과 관계없이 처리 가능 건을 본다.
+    scorer(query, texts) -> [0~1]가 실패하면 글자 유사도로 대체한다.
+    """
+    menus = set(menus or [])
+    if not menus:
+        return []
+    rows = [r for r in conn.execute(
+        "SELECT id, registrant_id, voc_text, matched_menus, created_at, handling_note, handled_at"
+        " FROM voc_history WHERE is_processable=1 AND id IS NOT ? ORDER BY id DESC",
+        (exclude_id,)) if menus & set(r["matched_menus"].split("|"))]
+    if not rows:
+        return []
+    scorer = scorer or bigram_scorer
+    texts = [r["voc_text"] for r in rows]
+    try:
+        scores = scorer(voc_text, texts)
+        threshold = getattr(scorer, "threshold", HISTORY_THRESHOLD)
+    except Exception:  # 임베딩 오류·한도 → 글자 유사도
+        scores, threshold = bigram_scorer(voc_text, texts), HISTORY_THRESHOLD
+    ranked = sorted(zip(scores, rows), key=lambda x: (-x[0], -x[1]["id"]))
+    return [{"id": r["id"], "created_at": r["created_at"], "registrant_id": r["registrant_id"],
+             "voc_text": r["voc_text"], "menus": [m for m in r["matched_menus"].split("|") if m],
+             "handling_note": r["handling_note"], "handled_at": r["handled_at"],
+             "similarity": round(s, 2), "same_registrant": r["registrant_id"] == registrant_id}
+            for s, r in ranked[:k] if s >= threshold]
 
 
 def get_menu_counts(conn):

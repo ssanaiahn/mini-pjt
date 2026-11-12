@@ -73,3 +73,4 @@ def test_judge_round_skips_failed_scoring(tmp_path):
             raise RuntimeError("throttled")
     out = j.judge_round(CASES, [rec("L01", 1)], tmp_path / "c.json", model=Broken())
     assert out["guidance"] == {} and out["errors"] == 2
+    assert out["error_messages"][0].startswith("L01 guidance: RuntimeError: throttled")

@@ -8,7 +8,7 @@ from voc.service import process_voc
 STEP_LABELS = {"validate": "입력 검증", "guard": "개인정보 가리기", "policy_check": "서비스 정책 확인",
                "rule_match": "메뉴명 확인", "agent_judge": "판정 에이전트",
                "similar_fallback": "글자 유사도", "guidance": "안내 문구", "record": "저장·누적",
-               "lookup": "조회"}
+               "history": "유사 VOC 이력", "lookup": "조회"}
 SOURCE_LABELS = {"menu": "본문의 메뉴명·별칭", "similar": "과거 VOC 글자 유사도",
                  "agent": "판정 에이전트(Claude)", "policy": "서비스 정책(국내 임직원 전용)"}
 GUIDANCE_LABELS = {"claude": "Claude 생성", "policy": "정책 고정 문구"}
@@ -37,6 +37,23 @@ def render_judgement(result):
     st.caption("처리 경로: " + " → ".join(STEP_LABELS.get(s, s) for s in result.get("steps", [])))
 
 
+def render_history(history):
+    """같은 메뉴의 비슷한 과거 VOC와 처리 내용(담당자 참고용)."""
+    st.subheader("유사 VOC 처리 이력")
+    if not history:
+        st.caption("같은 메뉴로 접수된 비슷한 과거 VOC가 없습니다.")
+        return
+    if any(h["same_registrant"] for h in history):
+        st.info("같은 등록자가 비슷한 내용을 이전에도 접수했습니다. 기존 처리 내용을 참고하세요.")
+    st.dataframe([{
+        "접수일": (h["created_at"] or "")[:10],
+        "등록자": h["registrant_id"] + (" (같은 등록자)" if h["same_registrant"] else ""),
+        "내용": h["voc_text"], "처리 내용": h["handling_note"] or "처리 전",
+        "처리일": h["handled_at"] or "-", "유사도": h["similarity"]} for h in history],
+        hide_index=True)
+    st.caption('처리 내용의 "(모의)"는 실제 처리 기록이 없어 만든 예시입니다.')
+
+
 def render_result(result):
     """판정 결과를 화면에 표시한다."""
     if "error" in result:
@@ -47,6 +64,7 @@ def render_result(result):
         render_judgement(result)
         st.write("매칭된 메뉴: " + ", ".join(result["matched_menus"]))
         st.write("메뉴별 누적 횟수:", result["menu_counts"])
+        render_history(result.get("similar_history") or [])
         if result["is_frequent"]:
             st.info("자주 들어오는 VOC (누적 3회 이상)")
             summary = result.get("lookup_summary") or {}
@@ -93,6 +111,7 @@ def main():
     st.sidebar.caption("등록 메뉴: " + ", ".join(m["name"] for m in menus))
     conn = vocdb.connect()
     vocdb.init_db(conn, menus=menus)
+    vocdb.backfill_mock_handling(conn)  # 처리 기록이 없는 과거 접수 건에 모의 처리 내용
     with st.form("voc_form"):
         voc_text = st.text_area("VOC 본문")
         registrant_id = st.text_input("등록자 ID")
@@ -107,7 +126,7 @@ def main():
     with st.expander("VOC 이력"):
         rows = conn.execute(
             "SELECT id, registrant_id, voc_text, is_processable, matched_menus, "
-            "match_source, similar_voc_id, similarity, judge_reason "
+            "match_source, similar_voc_id, similarity, judge_reason, handling_note, handled_at "
             "FROM voc_history ORDER BY id DESC LIMIT 50").fetchall()
         st.dataframe([dict(r) for r in rows])
     conn.close()

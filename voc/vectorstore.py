@@ -45,6 +45,25 @@ def sync(store, rows):
             ids=[str(r["id"]) for r in new])
 
 
+def embedding_scorer(query, texts):
+    """Titan 임베딩 코사인 유사도 목록(유사 VOC 처리 이력용). 오류는 호출한 쪽이 글자 유사도로 대체."""
+    import math
+
+    emb = llm.embeddings()
+    q = emb.embed_query(query)
+    docs = emb.embed_documents(list(texts))
+
+    def cos(a, b):
+        na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
+        return sum(x * y for x, y in zip(a, b)) / (na * nb) if na and nb else 0.0
+    return [cos(q, d) for d in docs]
+
+
+# 같은 메뉴 후보만 비교하므로 0.3: 실제 이력에서 같은 요청의 다른 표현은 0.31~0.6,
+# 같은 메뉴의 다른 요청(양식 변경 등)은 0.28, 다른 메뉴·잡담은 0.22 이하였다(2026-11-12 확인).
+embedding_scorer.threshold = 0.3
+
+
 def search(conn, voc_text, k=3, path=None):
     """의미가 가까운 과거 VOC 상위 k건: [{id, voc_text, menus, similarity}] (similarity = 1 - 코사인 거리)."""
     rows = reference_rows(conn)

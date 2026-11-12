@@ -77,6 +77,35 @@ def test_ac2_history_and_counts_survive_reopen(tmp_path, monkeypatch):
     conn2.close()
 
 
+def test_init_db_backfills_new_mock_users(tmp_path, monkeypatch):
+    """기존 DB(u001~u006만 있음)를 다시 열면 새로 추가된 모의 사용자와 업무 데이터만 채운다."""
+    monkeypatch.setenv("VOC_DB_PATH", str(tmp_path / "old.db"))
+    conn = connect()
+    init_db(conn)
+    old = ("u001", "u002", "u003", "u004", "u005", "u006")
+    qs = ",".join("?" * len(old))
+    conn.execute(f"DELETE FROM users WHERE user_id NOT IN ({qs})", old)
+    conn.execute(f"DELETE FROM business_data WHERE user_id NOT IN ({qs})", old)
+    conn.execute("INSERT INTO voc_history(registrant_id, voc_text, is_processable, matched_menus,"
+                 " created_at) VALUES ('나라바', '서약서 체결 현황', 1, '비밀유지계약', 't')")
+    conn.commit()
+    init_db(conn)
+    users = {r[0] for r in conn.execute("SELECT user_id FROM users")}
+    assert {"u001", "나라바", "가나다", "abc", "def", "ghi", "aaa", "다나가", "아차파"} <= users
+    assert len(users) == 33  # u001~u006 + 앱 테스트 등록자 7명 + 추가 20명
+    n_menus = len(load_menus())
+    assert _n_where(conn, "business_data", "user_id='나라바'") == n_menus
+    assert _n(conn, "voc_history") == 1  # 이력은 그대로
+    sizes = {t: _n(conn, t) for t in ("users", "business_data")}
+    init_db(conn)
+    assert {t: _n(conn, t) for t in sizes} == sizes  # 두 번째부터는 아무것도 추가 안 함
+    conn.close()
+
+
+def _n_where(conn, table, where):
+    return conn.execute(f"SELECT COUNT(*) FROM {table} WHERE {where}").fetchone()[0]
+
+
 def test_ac2_reopen_twice_keeps_row_counts(tmp_path, monkeypatch):
     monkeypatch.setenv("VOC_DB_PATH", str(tmp_path / "again.db"))
     conn = connect()

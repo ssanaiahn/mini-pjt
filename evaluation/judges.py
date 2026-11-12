@@ -91,7 +91,7 @@ def judge_round(cases, records, cache_path, model=None):
     if cache_path and cache_path.exists():
         data.update(json.loads(cache_path.read_text(encoding="utf-8")))
     texts = {c["id"]: c["text"] for c in cases}
-    errors = 0
+    errors, messages = 0, []
     for cid, r in _first_ok(records).items():
         if cid not in texts:
             continue
@@ -108,12 +108,14 @@ def judge_round(cases, records, cache_path, model=None):
         for kind, job in jobs:
             try:
                 data[kind][cid] = job()
-            except Exception:  # 한도·오류: 저장하지 않아 다음 실행 때 다시 채점
+            except Exception as e:  # 한도·오류: 저장하지 않아 다음 실행 때 다시 채점
                 errors += 1
+                messages.append(f"{cid} {kind}: {type(e).__name__}: {e}"[:300])
     if cache_path:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     g = [v["overall"] for v in data["guidance"].values()]
     f = [v["score"] for v in data["faithfulness"].values() if v["score"] is not None]
     return {**data, "guidance_avg": round(mean(g), 2) if g else None,
-            "faithfulness_avg": round(mean(f), 3) if f else None, "errors": errors}
+            "faithfulness_avg": round(mean(f), 3) if f else None, "errors": errors,
+            "error_messages": messages}
