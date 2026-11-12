@@ -19,9 +19,10 @@ AWS_SECRET_ACCESS_KEY=...
 AWS_DEFAULT_REGION=us-east-1
 ```
 - `.env`는 `.gitignore`에 포함되어 있어 GitHub에 올라가지 않습니다.
-- 기본 모델은 Claude Sonnet 4.5입니다. 다른 모델을 쓰려면 `VOC_BEDROCK_MODEL`을 지정하세요.
+- 기본 모델은 Claude Sonnet 4.6입니다. 다른 모델을 쓰려면 `VOC_BEDROCK_MODEL`을 지정하세요.
 - 자격 증명이 없거나 `VOC_USE_LLM=0`이면 **규칙 모드**로 동작합니다. 규칙 모드는 메뉴명, 글자 유사도, 템플릿 문구만 씁니다.
 - Bedrock 호출이 실패하거나 하루 사용량 한도에 걸리면, 그 건만 규칙 모드로 자동 대체됩니다.
+- LangSmith 트레이스를 남기려면 `.env`에 `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`를 추가합니다. 개인정보는 그래프 실행 전에 가려지므로 트레이스에는 가린 본문만 남습니다.
 
 ## 실행
 ```bash
@@ -44,6 +45,15 @@ python -m pytest -q
 - 테스트는 Bedrock을 호출하지 않습니다. 기본은 규칙 모드이고, 에이전트·모델이 필요한 테스트는 가짜로 대체합니다.
 - MCP 서버는 실제로 실행해 연결을 확인합니다.
 - 샘플 VOC 10건의 기대값은 `data/sample_vocs_expected.csv`에 있습니다.
+
+## 평가 (실제 Bedrock)
+```bash
+python -m evaluation.run_eval --round 1
+```
+- 인-아웃 세트 `evaluation/test_queries.json`(27건)을 실제 Bedrock으로 3회씩 판정하고 지표를 계산해 `evaluation/round1_report.md`를 씁니다. 설계는 `evaluation/design.md`에 있습니다.
+- 평가용 임시 DB와 과거 이력(`evaluation/seed_history.csv`)을 쓰며, `data/voc.db`는 건드리지 않습니다.
+- 토큰을 씁니다. 한도에 걸리면 같은 명령을 다시 실행해 이어서 진행합니다.
+- 트레이스는 LangSmith 프로젝트 `voc-eval-round1`에 남습니다.
 
 ## 설정
 메뉴명·별칭은 `config/menus.json`에서 정의합니다(화면 편집 기능 없음).

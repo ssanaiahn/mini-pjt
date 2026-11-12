@@ -4,6 +4,8 @@ validate ─(빈 입력)→ END
    │
  guard(개인정보 가리기)
    │
+ policy_check ─(정책 해당: 해외 법인 등)→ 고정 문구로 record (LLM 미호출)
+   │
  rule_match ─(메뉴명 있음)──────────────→ record
    │(없음)
    ├─(LLM 사용)→ agent_judge ─(오류)→ similar_fallback
@@ -18,11 +20,11 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from . import agent, llm
-from .db import load_menus
+from .db import load_menus, load_policies
 from .guidance import generate_guidance_with_source
 from .pii import mask_pii
 from .service import (FREQUENT_THRESHOLD, find_similar_voc, get_menu_counts, lookup_mock_db,
-                      match_menus, save_voc, validate_input)
+                      match_menus, match_policy, save_voc, validate_input)
 
 
 class VocState(TypedDict, total=False):
@@ -35,6 +37,7 @@ class VocState(TypedDict, total=False):
     similar: Optional[dict]
     judge: Optional[dict]
     agent_error: Optional[str]
+    policy: Optional[dict]
     guidance: Optional[str]
     guidance_source: Optional[str]
     voc_id: int
@@ -47,8 +50,9 @@ class VocState(TypedDict, total=False):
     steps: list
 
 
-def build_graph(conn, menus, llm_on):
+def build_graph(conn, menus, llm_on, policies=None):
     names = [m["name"] for m in menus]
+    policies = load_policies() if policies is None else policies
 
     def step(state, name):
         return [*state.get("steps", []), name]
@@ -59,8 +63,16 @@ def build_graph(conn, menus, llm_on):
 
     def guard(s):
         text, found = mask_pii(s["voc_text"].strip())
+        found = list(dict.fromkeys([*s.get("pii_found", []), *found]))  # run_voc에서 먼저 가린 것과 합침
         return {"voc_text": text, "registrant_id": s["registrant_id"].strip(),
                 "pii_found": found, "steps": step(s, "guard")}
+
+    def policy_check(s):
+        p = match_policy(s["voc_text"], policies)
+        if not p:
+            return {"policy": None, "steps": step(s, "policy_check")}
+        return {"policy": p, "matched": [], "match_source": "policy", "guidance": p["message"],
+                "guidance_source": "policy", "steps": step(s, "policy_check")}
 
     def rule_match(s):
         matched = match_menus(s["voc_text"], menus)
@@ -88,10 +100,11 @@ def build_graph(conn, menus, llm_on):
 
     def record(s):
         matched = s.get("matched") or []
+        reason = (f"정책: {s['policy']['id']}" if s.get("policy")
+                  else (s.get("judge") or {}).get("reason"))
         voc_id, created_at = save_voc(
             conn, s["registrant_id"], s["voc_text"], matched, s.get("guidance"),
-            s.get("guidance_source"), s.get("match_source"), s.get("similar"),
-            (s.get("judge") or {}).get("reason"))
+            s.get("guidance_source"), s.get("match_source"), s.get("similar"), reason)
         counts = get_menu_counts(conn)
         snapshot = {m: counts[m] for m in matched}
         frequent = [m for m in matched if snapshot[m] >= FREQUENT_THRESHOLD]
@@ -105,14 +118,17 @@ def build_graph(conn, menus, llm_on):
                 "steps": step(s, "lookup")}
 
     g = StateGraph(VocState)
-    for name, fn in [("validate", validate), ("guard", guard), ("rule_match", rule_match),
+    for name, fn in [("validate", validate), ("guard", guard), ("policy_check", policy_check),
+                     ("rule_match", rule_match),
                      ("agent_judge", agent_judge), ("similar_fallback", similar_fallback),
                      ("guidance", guidance), ("record", record), ("lookup", lookup)]:
         g.add_node(name, fn)
     g.add_edge(START, "validate")
     g.add_conditional_edges("validate", lambda s: "guard" if s["input_validation"]["is_valid"]
                             else END, ["guard", END])
-    g.add_edge("guard", "rule_match")
+    g.add_edge("guard", "policy_check")
+    g.add_conditional_edges("policy_check", lambda s: "record" if s.get("policy") else "rule_match",
+                            ["record", "rule_match"])
     g.add_conditional_edges(
         "rule_match",
         lambda s: "record" if s["matched"] else ("agent_judge" if llm_on else "similar_fallback"),
@@ -135,8 +151,10 @@ def build_graph(conn, menus, llm_on):
 def run_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
     menus = menus or load_menus()
     llm_on = bool(use_api) and llm.llm_enabled()
+    # 그래프 입력은 트레이스(LangSmith)에 그대로 기록되므로, 실행 전에 개인정보를 가린다.
+    masked, found = mask_pii((voc_text or "").strip())
     s = build_graph(conn, menus, llm_on).invoke(
-        {"voc_text": voc_text, "registrant_id": registrant_id, "steps": []})
+        {"voc_text": masked, "registrant_id": registrant_id, "pii_found": found, "steps": []})
     v = s["input_validation"]
     if not v["is_valid"]:
         return {"error": " ".join(v["warnings"]), "warnings": v["warnings"],

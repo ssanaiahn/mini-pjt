@@ -61,7 +61,7 @@ Bedrock 사용 한도에 걸리거나 장애가 나도 규칙 판정과 템플�
 | `lookup_business_data` | 업무 데이터 | 등록자의 메뉴별 업무 이력 조회 | MCP | 조회 |
 | `search_similar_vocs` | VOC 이력 | 의미가 비슷한 과거 VOC와 그 처리 메뉴 검색 | 로컬 LangChain 도구(Titan 임베딩 + Chroma) | 판정 |
 
-- 판정 에이전트: Claude Sonnet 4.5(Bedrock). 결과는 구조화 출력으로 받는다.
+- 판정 에이전트: Claude Sonnet 4.6(Bedrock). 결과는 구조화 출력으로 받는다.
 - 조회 에이전트: 같은 모델. 반복 VOC가 들어오면 담당자용 요약을 쓴다.
 - 판정 흐름 전체는 LangGraph로 구성했다(부록 참고).
 
@@ -74,7 +74,7 @@ Bedrock 사용 한도에 걸리거나 장애가 나도 규칙 판정과 템플�
 | 업무 데이터(`business_data`) | SQLite | **가짜** (메뉴마다 샘플 1건) |
 | 과거 VOC 벡터 | Chroma `data/chroma/` | VOC 이력에서 자동 생성 |
 | 기대값표 | `data/sample_vocs_expected.csv` | 직접 작성한 샘플 VOC 10건 |
-| LLM·임베딩 | AWS Bedrock API | 실제 (Claude Sonnet 4.5, Titan Embed v2) |
+| LLM·임베딩 | AWS Bedrock API | 실제 (Claude Sonnet 4.6, Titan Embed v2) |
 
 사내 DB에는 실습 환경에서 접속할 수 없다. 그래서 계정과 업무 데이터는 모의 DB로 대신하고, 도구 인터페이스만 실제 연동을 가정해 설계했다.
 
@@ -147,7 +147,7 @@ validate ─(빈 입력)→ 경고만 표시, 저장 안 함
 - 처리 불가 건: 이력에만 저장하고 누적에서 뺀다.
 
 ### LLM 설정
-- AWS Bedrock 채팅 모델: `global.anthropic.claude-sonnet-4-5-20250929-v1:0`. `VOC_BEDROCK_MODEL`로 바꿀 수 있다.
+- AWS Bedrock 채팅 모델: `global.anthropic.claude-sonnet-4-6`. `VOC_BEDROCK_MODEL`로 바꿀 수 있다.
 - 임베딩 모델: `amazon.titan-embed-text-v2:0`
 - 사용 조건: AWS 자격 증명이 있고(`.env` 가능) `VOC_USE_LLM`이 0이 아니어야 한다.
 - 조건이 안 되면 1차·3차 규칙과 템플릿 문구만으로 동작한다. 테스트는 이 모드로 실행한다.

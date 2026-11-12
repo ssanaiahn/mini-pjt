@@ -34,6 +34,15 @@ def match_menus(voc_text, menus):
     return sorted(first_pos, key=first_pos.get)
 
 
+def match_policy(voc_text, policies):
+    """본문(공백 무시)에 정책 표현이 있으면 그 정책, 없으면 None. 1차 규칙보다 먼저 적용한다."""
+    text = normalize(voc_text)
+    for p in policies:
+        if any(normalize(t) and normalize(t) in text for t in p.get("patterns", [])):
+            return p
+    return None
+
+
 def _bigrams(text):
     t = normalize(text)
     return {t[i:i + 2] for i in range(len(t) - 1)} if len(t) > 1 else {t} - {""}

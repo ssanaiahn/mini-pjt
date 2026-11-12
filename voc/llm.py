@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-CHAT_MODEL = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"  # VOC_BEDROCK_MODEL로 변경 가능
+CHAT_MODEL = "global.anthropic.claude-sonnet-4-6"  # VOC_BEDROCK_MODEL로 변경 가능
 EMBED_MODEL = "amazon.titan-embed-text-v2:0"
 DEFAULT_REGION = "us-east-1"
 

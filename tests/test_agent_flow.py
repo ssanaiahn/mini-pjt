@@ -51,7 +51,7 @@ def test_menu_match_skips_agent(conn, monkeypatch, llm_on):
     set_judge(monkeypatch, llm_on, {"error": "should not be called"})
     r = run(conn, "사용자 권한 신청이 안 돼요")
     assert r["match_source"] == "menu" and llm_on["judge"] == []
-    assert r["steps"] == ["validate", "guard", "rule_match", "record"]
+    assert r["steps"] == ["validate", "guard", "policy_check", "rule_match", "record"]
 
 
 def test_agent_judges_processable(conn, monkeypatch, llm_on):
@@ -63,7 +63,7 @@ def test_agent_judges_processable(conn, monkeypatch, llm_on):
     assert r["matched_menus"] == ["사용자 관리"]  # 등록되지 않은 메뉴는 버림
     assert r["judge"]["tool_calls"] == ["list_menus", "search_similar_vocs"]
     assert r["count_snapshot"] == {"사용자 관리": 1}
-    assert r["steps"] == ["validate", "guard", "rule_match", "agent_judge", "record"]
+    assert r["steps"] == ["validate", "guard", "policy_check", "rule_match", "agent_judge", "record"]
     row = conn.execute("SELECT match_source, judge_reason FROM voc_history").fetchone()
     assert tuple(row) == ("agent", "계정 잠금은 사용자 관리 업무")
 
@@ -122,6 +122,29 @@ def test_pii_masked_before_save_and_agent(conn, monkeypatch, llm_on):
     assert "kim@example.com" not in saved and "[이메일]" in saved
 
 
+def test_graph_input_is_masked(conn, monkeypatch, llm_on):
+    """LangSmith는 그래프 입력을 기록하므로, 입력 상태부터 가린 본문이어야 한다."""
+    import voc.graph as graph
+    set_judge(monkeypatch, llm_on, {"processable": False, "menus": [], "reason": "-",
+                                    "similar_voc_ids": [], "tool_calls": []})
+    captured = []
+    real_build = graph.build_graph
+
+    def build(*a, **kw):
+        g = real_build(*a, **kw)
+
+        class Wrapped:
+            def invoke(self, state, *ia, **ikw):
+                captured.append(dict(state))
+                return g.invoke(state, *ia, **ikw)
+        return Wrapped()
+    monkeypatch.setattr(graph, "build_graph", build)
+    r = run(conn, "연락처 010-1234-5678 회신 부탁")
+    assert "010-1234-5678" not in captured[0]["voc_text"]
+    assert "[전화번호]" in captured[0]["voc_text"]
+    assert r["pii_found"] == ["전화번호"]
+
+
 def test_mask_pii_patterns():
     text, found = mask_pii("주민 900101-1234567 / 01098765432 / a.b@c.co.kr")
     assert text == "주민 [주민번호] / [전화번호] / [이메일]"
@@ -132,5 +155,5 @@ def test_mask_pii_patterns():
 def test_graph_structure(conn):
     g = build_graph(conn, MENUS, llm_on=True).get_graph()
     nodes = set(g.nodes) - {"__start__", "__end__"}
-    assert nodes == {"validate", "guard", "rule_match", "agent_judge", "similar_fallback",
+    assert nodes == {"validate", "guard", "policy_check", "rule_match", "agent_judge", "similar_fallback",
                      "guidance", "record", "lookup"}

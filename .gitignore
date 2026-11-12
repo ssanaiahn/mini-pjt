@@ -25,3 +25,6 @@ Thumbs.db
 
 # Vector store (rebuilt from voc.db)
 data/chroma/
+
+# Evaluation scratch (temp DB/Chroma per round)
+evaluation/results/*_work/

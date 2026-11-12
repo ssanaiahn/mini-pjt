@@ -27,6 +27,12 @@ def load_menus(path=None):
     return menus
 
 
+def load_policies(path=None):
+    """서비스 정책 목록 [{id, description, patterns, message}]. 없으면 빈 목록."""
+    with open(path or os.environ.get("VOC_MENUS_PATH") or MENUS_PATH, encoding="utf-8") as f:
+        return json.load(f).get("policies", [])
+
+
 def normalize(text):
     """공백을 모두 제거하고 영문을 소문자로 바꾼다."""
     return "".join((text or "").split()).lower()

@@ -95,6 +95,33 @@ def _tool_calls(messages):
             if c["name"] != JudgeResult.__name__]
 
 
+def _tool_results(messages):
+    """도구 응답(ToolMessage) 목록 [{name, content}] (결과 제출용 JudgeResult는 제외)."""
+    from langchain_core.messages import ToolMessage
+
+    return [{"name": m.name, "content": llm.text_of(m)} for m in messages
+            if isinstance(m, ToolMessage) and m.name != JudgeResult.__name__]
+
+
+def _retrieved(tool_results):
+    """search_similar_vocs 응답의 검색 결과를 이어 붙인다(id 중복 제거, 잘못된 응답은 건너뜀)."""
+    import json
+
+    out, seen = [], set()
+    for t in tool_results:
+        if t["name"] != "search_similar_vocs":
+            continue
+        try:
+            results = json.loads(t["content"]).get("results", [])
+        except (ValueError, AttributeError):
+            continue
+        for r in results:
+            if r.get("id") not in seen:
+                seen.add(r.get("id"))
+                out.append({k: r.get(k) for k in ("id", "voc_text", "menus", "similarity")})
+    return out
+
+
 async def _judge(voc_text):
     from langchain.agents import create_agent
     from langchain.agents.structured_output import ToolStrategy
@@ -108,8 +135,10 @@ async def _judge(voc_text):
         f"판정할 VOC 본문:\n{voc_text}\n\n"
         "list_menus와 search_similar_vocs 도구로 먼저 확인한 뒤 JudgeResult로 답하라."))]})
     r = out["structured_response"]
+    tool_results = _tool_results(out["messages"])
     return {"processable": r.processable, "menus": r.menus, "reason": r.reason,
-            "similar_voc_ids": r.similar_voc_ids, "tool_calls": _tool_calls(out["messages"])}
+            "similar_voc_ids": r.similar_voc_ids, "tool_calls": _tool_calls(out["messages"]),
+            "tool_results": tool_results, "retrieved": _retrieved(tool_results)}
 
 
 async def _lookup(registrant_id, menus):
@@ -131,7 +160,8 @@ def _run(coro):
 
 
 def judge_voc(voc_text):
-    """{"processable", "menus", "reason", "similar_voc_ids", "tool_calls"} 또는 {"error"}."""
+    """{"processable", "menus", "reason", "similar_voc_ids", "tool_calls", "tool_results",
+    "retrieved"} 또는 {"error"}."""
     return _run(_judge(voc_text))
 
 

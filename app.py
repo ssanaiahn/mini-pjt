@@ -5,11 +5,13 @@ from voc import db as vocdb
 from voc import llm
 from voc.service import process_voc
 
-STEP_LABELS = {"validate": "입력 검증", "guard": "개인정보 가리기", "rule_match": "메뉴명 확인",
-               "agent_judge": "판정 에이전트", "similar_fallback": "글자 유사도",
-               "guidance": "안내 문구", "record": "저장·누적", "lookup": "조회"}
+STEP_LABELS = {"validate": "입력 검증", "guard": "개인정보 가리기", "policy_check": "서비스 정책 확인",
+               "rule_match": "메뉴명 확인", "agent_judge": "판정 에이전트",
+               "similar_fallback": "글자 유사도", "guidance": "안내 문구", "record": "저장·누적",
+               "lookup": "조회"}
 SOURCE_LABELS = {"menu": "본문의 메뉴명·별칭", "similar": "과거 VOC 글자 유사도",
-                 "agent": "판정 에이전트(Claude)"}
+                 "agent": "판정 에이전트(Claude)", "policy": "서비스 정책(국내 임직원 전용)"}
+GUIDANCE_LABELS = {"claude": "Claude 생성", "policy": "정책 고정 문구"}
 
 
 def render_judgement(result):
@@ -71,7 +73,7 @@ def render_result(result):
         st.error("판정: 처리 불가")
         render_judgement(result)
         st.subheader("안내 문구 초안")
-        source = "Claude 생성" if result["guidance_source"] == "claude" else "템플릿"
+        source = GUIDANCE_LABELS.get(result["guidance_source"], "템플릿")
         st.caption(f"문구 출처: {source}")
         st.text_area("초안", result["guidance_draft"] or "", height=160)
 

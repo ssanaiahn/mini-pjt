@@ -14,3 +14,5 @@ fastmcp
 chromadb
 langchain-chroma
 pydantic
+# 트레이스·평가
+langsmith
