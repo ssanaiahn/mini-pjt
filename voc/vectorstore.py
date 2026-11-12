@@ -45,13 +45,43 @@ def sync(store, rows):
             ids=[str(r["id"]) for r in new])
 
 
+EMBED_CACHE_MAX = 5000  # 앱 프로세스가 켜져 있는 동안 기억할 문장 수(넘으면 오래된 것부터 버림)
+_EMBED_CACHE = {}  # 문장 → 임베딩. 과거 VOC 문장은 바뀌지 않으므로 다시 계산하지 않는다
+
+
+def clear_embedding_cache():
+    _EMBED_CACHE.clear()
+
+
+def _remember(text, vec):
+    _EMBED_CACHE[text] = vec
+    while len(_EMBED_CACHE) > EMBED_CACHE_MAX:
+        _EMBED_CACHE.pop(next(iter(_EMBED_CACHE)))
+
+
+def _embed(query, texts):
+    """질문·문장 임베딩. 캐시에 없는 것만 Titan으로 계산한다."""
+    emb = None
+    if query not in _EMBED_CACHE:
+        emb = llm.embeddings()
+        _remember(query, emb.embed_query(query))
+    q = _EMBED_CACHE[query]
+    missing = list(dict.fromkeys(t for t in texts if t not in _EMBED_CACHE))
+    if missing:
+        emb = emb or llm.embeddings()
+        for t, v in zip(missing, emb.embed_documents(missing)):
+            _remember(t, v)
+    # 상한을 넘어 방금 버려진 문장이 있으면 그 자리에서 다시 계산
+    lost = [t for t in texts if t not in _EMBED_CACHE]
+    extra = dict(zip(lost, (emb or llm.embeddings()).embed_documents(lost))) if lost else {}
+    return q, [_EMBED_CACHE.get(t) or extra[t] for t in texts]
+
+
 def embedding_scorer(query, texts):
     """Titan 임베딩 코사인 유사도 목록(유사 VOC 처리 이력용). 오류는 호출한 쪽이 글자 유사도로 대체."""
     import math
 
-    emb = llm.embeddings()
-    q = emb.embed_query(query)
-    docs = emb.embed_documents(list(texts))
+    q, docs = _embed(query, list(texts))
 
     def cos(a, b):
         na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
