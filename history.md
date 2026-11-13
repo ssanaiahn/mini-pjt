@@ -131,3 +131,5 @@
 ### 18. GitHub에 올리기와 공개 전환
 - 공개 전 점검: `.env`는 커밋된 적 없음, AWS·LangSmith 키 패턴 없음(README 예시 `...`만), DB·Chroma 파일 없음, 전화번호는 모두 가짜 값.
 - `main`만 `origin`(`ssanaiahn/mini-pjt`)에 푸시(다른 브랜치는 올리지 않음).
+- 사용자가 GitHub에서 저장소를 공개로 전환. 로그인 없이 확인: 저장소·README·`src/`·SERVICE.md·라운드3 리포트 모두 열림(200), `.env`는 없음(404).
+- 제출 주소: https://github.com/ssanaiahn/mini-pjt
