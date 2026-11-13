@@ -1,11 +1,13 @@
 """LangGraph 흐름 + 에이전트 경로(에이전트·조회 요약은 가짜로 대체, 네트워크 없음)."""
 import pytest
 
-from voc import agent
-from voc.db import connect, init_db
-from voc.graph import build_graph
-from voc.pii import mask_pii
-from voc.service import bigram_scorer, process_voc
+from src.judgement import agent as judge_agent
+from src.lookup import agent as lookup_agent
+from src.shared.db import connect, init_db
+from src.workflows.voc_graph import build_graph
+from src.guardrails.pii import mask_pii
+from src.retrieval.lexical import bigram_scorer
+from src.workflows.voc_graph import process_voc
 
 MENUS = [
     {"name": "보안 신고", "aliases": []},
@@ -30,11 +32,11 @@ def llm_on(monkeypatch):
     def guidance(text, use_api=True, reason=None, hints=None):
         calls["guidance"].append(reason)
         return "에이전트 안내", "claude"
-    monkeypatch.setattr("voc.graph.generate_guidance_with_source", guidance)
-    monkeypatch.setattr(agent, "summarize_frequent", lambda rid, menus, history=None: calls["lookup"].append(
+    monkeypatch.setattr("src.workflows.voc_graph.generate_guidance_with_source", guidance)
+    monkeypatch.setattr(lookup_agent, "summarize_frequent", lambda rid, menus, history=None: calls["lookup"].append(
         (rid, menus)) or {"summary": "요약", "tool_calls": ["lookup_account"]})
     # 유사 VOC 이력의 임베딩(Titan) 호출 대신 글자 유사도(네트워크 없음)
-    monkeypatch.setattr("voc.graph.history_scorer", lambda llm_on: bigram_scorer)
+    monkeypatch.setattr("src.workflows.voc_graph.history_scorer", lambda llm_on: bigram_scorer)
     return calls
 
 
@@ -42,7 +44,7 @@ def set_judge(monkeypatch, calls, result):
     def judge(text):
         calls["judge"].append(text)
         return result
-    monkeypatch.setattr(agent, "judge_voc", judge)
+    monkeypatch.setattr(judge_agent, "judge_voc", judge)
 
 
 def run(conn, text, rid="u001"):
@@ -106,8 +108,8 @@ def test_frequent_calls_lookup_agent(conn, monkeypatch, llm_on):
 
 
 def test_rule_mode_never_calls_agents(conn, monkeypatch):
-    monkeypatch.setattr(agent, "judge_voc", lambda t: pytest.fail("agent called"))
-    monkeypatch.setattr(agent, "summarize_frequent", lambda *a: pytest.fail("agent called"))
+    monkeypatch.setattr(judge_agent, "judge_voc", lambda t: pytest.fail("agent called"))
+    monkeypatch.setattr(lookup_agent, "summarize_frequent", lambda *a: pytest.fail("agent called"))
     for _ in range(3):
         r = run(conn, "보안 신고 문의")
     assert r["mode"] == "rule" and r["lookup_summary"] is None
@@ -126,7 +128,7 @@ def test_pii_masked_before_save_and_agent(conn, monkeypatch, llm_on):
 
 def test_graph_input_is_masked(conn, monkeypatch, llm_on):
     """LangSmith는 그래프 입력을 기록하므로, 입력 상태부터 가린 본문이어야 한다."""
-    import voc.graph as graph
+    import src.workflows.voc_graph as graph
     set_judge(monkeypatch, llm_on, {"processable": False, "menus": [], "reason": "-",
                                     "similar_voc_ids": [], "tool_calls": []})
     captured = []
@@ -165,7 +167,7 @@ def test_graph_passes_department_hints_to_guidance(conn, monkeypatch, llm_on):
     def guidance(text, use_api=True, reason=None, hints=None):
         seen["hints"] = hints
         return "안내", "claude"
-    monkeypatch.setattr("voc.graph.generate_guidance_with_source", guidance)
+    monkeypatch.setattr("src.workflows.voc_graph.generate_guidance_with_source", guidance)
     set_judge(monkeypatch, llm_on, {"processable": False, "menus": [], "reason": "-",
                                     "similar_voc_ids": [], "tool_calls": []})
     menus = [{"name": "보안 신고", "aliases": [],

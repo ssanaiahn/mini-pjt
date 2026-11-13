@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from evaluation import judges as j
+from src.evaluation import judges as j
 
 
 class FakeModel:

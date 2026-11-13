@@ -1,12 +1,15 @@
-"""SQLite 모의 DB: VOC 이력, 메뉴별 누적, 사용자/계정, 업무 데이터."""
-import json
+"""[shared] SQLite 연결·스키마·모의 데이터(사용자/계정, 업무 데이터) 시드.
+
+VOC 이력 저장·누적 계산은 records 도메인, 메뉴 설정 로딩은 shared/config.py가 맡는다.
+"""
 import os
 import sqlite3
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+from .config import load_menus
+from .llm import ROOT
+
 DEFAULT_DB = ROOT / "data" / "voc.db"
-MENUS_PATH = ROOT / "config" / "menus.json"
 
 MOCK_USERS = [
     ("u001", "김하나", "u001@example.com", "GOLD"),
@@ -45,49 +48,6 @@ MOCK_USERS = [
     ("다라마", "다라마", "darama@example.com", "GOLD"),
     ("타파하", "타파하", "tapaha@example.com", "SILVER"),
 ]
-
-
-# 모의 처리 내용: 실제 처리 기록이 없어 메뉴별로 대략적인 처리 방식을 만들어 둔다(화면에 "(모의)" 표시).
-MOCK_HANDLING = {
-    "보안 공지": "해당 보안 공지 링크와 패치 적용 가이드를 회신",
-    "정보보호 규정": "관련 규정 조항과 최신 가이드 문서 위치를 안내",
-    "보안 신고": "보안관제팀으로 이관하고, 의심 메일 차단과 비밀번호 변경 방법을 안내",
-    "개선 제안": "검토 부서에 전달해 차기 개선 과제로 등록하고 결과를 회신",
-    "비밀유지계약": "부서별 서약서 서명 현황을 엑셀로 추출해 회신",
-    "사용자 관리": "권한 신청 내용을 확인해 권한을 부여하고 처리 완료 메일을 발송",
-}
-MOCK_HANDLING_DEFAULT = "담당자가 내용을 확인해 처리하고 결과를 회신"
-
-
-def load_menus(path=None):
-    with open(path or os.environ.get("VOC_MENUS_PATH") or MENUS_PATH, encoding="utf-8") as f:
-        menus = json.load(f)["menus"]
-    if not isinstance(menus, list):
-        raise ValueError("menus 설정 형식이 올바르지 않습니다")
-    validate_menus(menus)
-    return menus
-
-
-def load_policies(path=None):
-    """서비스 정책 목록 [{id, description, patterns, message}]. 없으면 빈 목록."""
-    with open(path or os.environ.get("VOC_MENUS_PATH") or MENUS_PATH, encoding="utf-8") as f:
-        return json.load(f).get("policies", [])
-
-
-def normalize(text):
-    """공백을 모두 제거하고 영문을 소문자로 바꾼다."""
-    return "".join((text or "").split()).lower()
-
-
-def validate_menus(menus):
-    """같은 메뉴명/별칭이 서로 다른 두 메뉴에 있으면 ValueError."""
-    owner = {}
-    for m in menus:
-        for term in [m["name"], *m.get("aliases", [])]:
-            key = normalize(term)
-            if owner.setdefault(key, m["name"]) != m["name"]:
-                raise ValueError(
-                    f"중복 등록된 메뉴명/별칭 '{term}': {owner[key]} / {m['name']}")
 
 
 def connect(db_path=None):
@@ -149,28 +109,6 @@ def init_db(conn, reset=False, menus=None):
                 (uid, m["name"], f"{m['name']} 샘플 건 ({uid})", "완료"),
             )
     conn.commit()
-
-
-def backfill_mock_handling(conn):
-    """처리 가능 건 중 처리 내용이 없는 건에 모의 처리 내용을 채운다(처리일 = 접수 다음 날).
-
-    앱 시작(매 화면 실행) 때 호출한다. 이미 처리 내용이 있는 건과 처리 불가 건은 건드리지 않는다.
-    반환: 채운 건수.
-    """
-    from datetime import date, timedelta
-
-    rows = conn.execute("SELECT id, matched_menus, created_at FROM voc_history"
-                        " WHERE is_processable=1 AND handling_note IS NULL").fetchall()
-    for r in rows:
-        menu = (r["matched_menus"] or "").split("|")[0]
-        try:
-            handled = (date.fromisoformat(r["created_at"][:10]) + timedelta(days=1)).isoformat()
-        except (TypeError, ValueError):
-            handled = (r["created_at"] or "")[:10]
-        conn.execute("UPDATE voc_history SET handling_note=?, handled_at=? WHERE id=?",
-                     ("(모의) " + MOCK_HANDLING.get(menu, MOCK_HANDLING_DEFAULT), handled, r["id"]))
-    conn.commit()
-    return len(rows)
 
 
 def _migrate(conn):

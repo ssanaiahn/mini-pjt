@@ -7,8 +7,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from voc.db import connect, init_db  # noqa: E402
-from voc.service import process_voc  # noqa: E402
+from src.shared.db import connect, init_db  # noqa: E402
+from src.workflows.voc_graph import process_voc  # noqa: E402
 
 EXPECTED = ROOT / "data" / "sample_vocs_expected.csv"
 
@@ -39,7 +39,7 @@ def parse_counts(v):
 
 def test_ac1_unknown_registrant_frequent(conn):
     """AC1"""
-    from voc.db import load_menus
+    from src.shared.config import load_menus
     name = load_menus()[0]["name"]
     for _ in range(3):
         res = process_voc(conn, f"{name} 문의", "nobody", use_api=False)
@@ -79,7 +79,8 @@ def test_ac1_sample_vocs_in_order(conn):
 
 
 def test_ac1_expected_table_composition():
-    from voc.db import load_menus, normalize
+    from src.shared.config import load_menus
+    from src.shared.text import normalize
 
     rows = load_rows()
     menus = load_menus()

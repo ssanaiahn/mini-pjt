@@ -1,4 +1,4 @@
-"""라운드 평가 실행: python -m evaluation.run_eval --round N [--repeats 3] [--only P01,G03] [--report-only]
+"""라운드 평가 실행: python -m src.evaluation.run_eval --round N [--repeats 3] [--only P01,G03] [--report-only]
 
 실제 Bedrock을 호출한다(토큰 사용). 중간에 멈추거나 한도에 걸리면 같은 명령을 다시 실행해
 끝나지 않은 실행만 이어서 진행한다. 실제 data/voc.db·data/chroma는 건드리지 않는다.
@@ -9,14 +9,13 @@ import os
 import subprocess
 import sys
 from datetime import date
-from pathlib import Path
 
-from voc import llm
-from voc.db import load_menus
+from ..shared import llm
+from ..shared.config import load_menus
 
 from . import dataset, judges, metrics, report, runner
 
-DIR = Path(__file__).resolve().parent
+DIR = llm.ROOT / "evaluation"  # 평가 데이터·리포트 폴더(코드는 src/evaluation)
 RESULTS = DIR / "results"
 EVAL_REGION = "us-west-2"
 

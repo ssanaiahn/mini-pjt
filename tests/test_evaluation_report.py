@@ -1,5 +1,5 @@
 """라운드 리포트 렌더링과 CLI 진입 조건(네트워크 없음)."""
-from evaluation import report, run_eval
+from src.evaluation import report, run_eval
 
 INFO = {"date": "2026-11-12", "model": "m", "region": "us-west-2", "cases": 2, "repeats": 3,
         "langsmith_project": "voc-eval-round1", "commit": "abc1234", "ragas_method": "claude"}

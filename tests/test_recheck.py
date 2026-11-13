@@ -1,9 +1,13 @@
 """재확인 키워드: 1차 규칙에 걸려도 키워드(AD·비밀번호 등)가 있으면 판정 에이전트가 다시 판단."""
 import pytest
 
-from voc import agent
-from voc.db import connect, init_db, load_menus
-from voc.service import bigram_scorer, needs_recheck, process_voc
+from src.judgement import agent as judge_agent
+from src.lookup import agent as lookup_agent
+from src.shared.db import connect, init_db
+from src.shared.config import load_menus
+from src.retrieval.lexical import bigram_scorer
+from src.judgement.rules import needs_recheck
+from src.workflows.voc_graph import process_voc
 
 MENUS = [{"name": "보안 신고", "aliases": []},
          {"name": "사용자 관리", "aliases": ["접속"],
@@ -23,14 +27,14 @@ def conn(tmp_path):
 def llm_on(monkeypatch):
     monkeypatch.setenv("VOC_USE_LLM", "1")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "dummy")
-    monkeypatch.setattr("voc.graph.generate_guidance_with_source",
+    monkeypatch.setattr("src.workflows.voc_graph.generate_guidance_with_source",
                         lambda *a, **k: ("안내", "claude"))
-    monkeypatch.setattr("voc.graph.history_scorer", lambda llm_on: bigram_scorer)
-    monkeypatch.setattr(agent, "summarize_frequent", lambda *a, **k: {"summary": "s", "tool_calls": []})
+    monkeypatch.setattr("src.workflows.voc_graph.history_scorer", lambda llm_on: bigram_scorer)
+    monkeypatch.setattr(lookup_agent, "summarize_frequent", lambda *a, **k: {"summary": "s", "tool_calls": []})
     calls = []
 
     def set_judge(result):
-        monkeypatch.setattr(agent, "judge_voc", lambda t: calls.append(t) or result)
+        monkeypatch.setattr(judge_agent, "judge_voc", lambda t: calls.append(t) or result)
     return calls, set_judge
 
 
@@ -92,7 +96,7 @@ def test_rule_mode_keeps_rule_result(conn):
 
 def test_judge_prompt_reads_unnamed_system_as_this_portal():
     """VOC는 이 포털의 창구로 접수되므로, 시스템명이 없으면 이 포털로 본다(2026-11-12 사용자 기준)."""
-    assert "시스템명이 없으면" in agent.JUDGE_PROMPT and "이 포털" in agent.JUDGE_PROMPT
+    assert "시스템명이 없으면" in judge_agent.JUDGE_PROMPT and "이 포털" in judge_agent.JUDGE_PROMPT
 
 
 def test_user_management_accepts_portal_access_problems():

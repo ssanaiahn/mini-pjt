@@ -1,12 +1,12 @@
 # 프로젝트: VOC 접수 판단·응답 보조
 
-과제 제출용 1인 프로젝트. Streamlit 앱(`app.py`), 로직 `voc/`, 메뉴 설정 `config/menus.json`, SQLite `data/voc.db`(모의 데이터만). 판정 흐름 LangGraph(`voc/graph.py`), Claude는 AWS Bedrock(`.env`의 AWS 자격 증명).
+과제 제출용 1인 프로젝트. 모든 소스는 `src/`(도메인별 폴더, 아래 "소스 구조"), Streamlit 앱 `src/ui/app.py`, 메뉴·정책 설정 `config/menus.json`, SQLite `data/voc.db`(모의 데이터만). 판정 흐름 LangGraph(`src/workflows/voc_graph.py`), Claude는 AWS Bedrock(`.env`의 AWS 자격 증명). 명령은 모두 프로젝트 루트에서 실행한다.
 
 ## 명령
-- 실행: `streamlit run app.py`
+- 실행: `streamlit run src/ui/app.py`
 - 테스트: `python -m pytest -q` (conftest가 `VOC_USE_LLM=0`으로 Bedrock 미호출, 임시 DB 사용)
-- MCP 서버 단독 실행: `python -m voc.mcp_server`
-- 라운드 평가(실제 Bedrock, 토큰 사용): `python -m evaluation.run_eval --round N` → `evaluation/roundN_report.md`. 설계 `evaluation/design.md`, 계획 `evaluation/plan.md`. 평가는 기본 us-west-2 리전(강의 안내: 공용 계정 한도 분산, `VOC_EVAL_REGION`으로 변경), 모델은 `llm.CHAT_MODEL`(Sonnet 4.6)로 고정(`.env`의 앱용 `VOC_BEDROCK_MODEL`과 별개, `VOC_EVAL_MODEL`로 변경)
+- MCP 서버 단독 실행: `python -m src.tools.mcp_server`
+- 라운드 평가(실제 Bedrock, 토큰 사용): `python -m src.evaluation.run_eval --round N` → `evaluation/roundN_report.md`(평가 코드는 `src/evaluation/`, 평가 데이터·리포트는 루트 `evaluation/`). 설계 `evaluation/design.md`, 계획 `evaluation/plan.md`. 평가는 기본 us-west-2 리전(강의 안내: 공용 계정 한도 분산, `VOC_EVAL_REGION`으로 변경), 모델은 `llm.CHAT_MODEL`(Sonnet 4.6)로 고정(`.env`의 앱용 `VOC_BEDROCK_MODEL`과 별개, `VOC_EVAL_MODEL`로 변경)
 
 ## 규칙
 - 정책(1차보다 먼저): `config/menus.json`의 `policies` 표현(예: 해외 법인, 현지 법인, 해외 지사, "미국 법인" 같은 국가+법인)이 있고 **접속·사용·승인·권한·계정 요청어도 함께 있으면** 처리 불가 + 고정 문구로 종료(LLM 미호출, match_source='policy'). 해외 법인 관련 보안 신고·개선 제안은 막지 않음. 국내 임직원 전용 포털이라 해외 법인 임직원 사용·해외 법인 접속 불가. "해외 출장"처럼 법인 언급 없는 문의는 막지 않음.
@@ -21,10 +21,48 @@
 - `search_similar_vocs`는 MCP 서버(stdio) 안에서 임베딩·Chroma가 응답하지 않아 로컬 도구로 둠. MCP로 옮기지 말 것.
 - 기본 모델 Sonnet 4.6(`global.anthropic.claude-sonnet-4-6`, `VOC_BEDROCK_MODEL`로 변경). 2026-11-12 us-east-1의 Sonnet 4.5 일일 한도 초과로 4.6으로 변경, 평가 라운드도 4.6. 계정 일일 토큰 한도에 걸리면 규칙 모드로 대체되며, 한도는 매일 갱신됨.
 - 빈/공백 입력은 경고만 표시하고 저장하지 않음.
-- 범위 외 금지: 화면 메뉴 편집, 발표 자료 등. 문서는 README.md, SERVICE.md, 기대값표(`data/sample_vocs_expected.csv`), 평가 폴더(`evaluation/`: 과제 기준·설계·계획·인-아웃 세트·라운드 리포트)만.
+- 범위 외 금지: 화면 메뉴 편집, 발표 자료 등. 문서는 README.md, SERVICE.md, history.md(작업 이력), 기대값표(`data/sample_vocs_expected.csv`), 평가 폴더(`evaluation/`: 과제 기준·설계·계획·인-아웃 세트·라운드 리포트)만.
 - 평가 개선은 판정 쪽(에이전트·검색·가드레일)에서만. 별칭 추가나 평가 정답·`seed_history.csv` 변경으로 점수를 올리지 않음.
 - 개인정보는 그래프 실행 전(`run_voc`)에 가림: LangSmith가 그래프 입력을 기록하기 때문.
 - 조회 에이전트 도구는 등록자 ID가 코드에서 고정된 래퍼(`_bound_lookup_tools`)로만 준다. LLM에 user_id 인자를 열어 두지 말 것(ID를 임의로 고쳐 다른 사람을 조회한 사례 있음).
+
+## 작업 이력 규칙 (history.md)
+
+- 채팅으로 작업을 진행하면 그 작업이 끝날 때마다 루트 `history.md`에 **시간 순서대로** 이어서 적는다(기존 항목은 고치지 않고 아래에 추가).
+- 날짜별 제목(`## YYYY-MM-DD`) 아래에 번호를 이어 붙인 항목(`### N. 제목`)으로 쓰고, 각 항목에 **무엇을 했는지 · 왜 했는지(사용자 요청·발견한 문제) · 결과(테스트·평가 수치, 커밋 해시)**를 남긴다.
+- 사용자 결정(예: Docker·API 불필요, 평가 리전)과 발견한 문제·원인도 기록한다. 실행하지 않은 일이나 확인하지 않은 결과는 쓰지 않는다.
+- 커밋하기 전에 해당 작업의 history.md 항목이 있는지 확인하고 함께 커밋한다.
+
+## 소스 구조 (src/)
+
+에이전트의 기술 역할(utils, models)이 아니라 **업무 도메인**별로 폴더를 나눈다.
+
+```
+src/
+├─ shared/       여러 도메인이 함께 쓰는 것만: llm.py(Bedrock 클라이언트·.env·ROOT), config.py(menus.json 로딩·검증),
+│                db.py(SQLite 연결·스키마·모의 사용자/업무 데이터 시드), text.py(정규화·bigram 유사도),
+│                agent_runtime.py(에이전트 실행 시간 제한·오류 흡수, 호출 도구 이름)
+├─ guardrails/   입력·정책 가드: pii.py(개인정보 가리기), policy.py(국내 임직원 전용 정책), input_check.py(빈 입력)
+├─ judgement/    접수 판정: rules.py(1차 메뉴명·별칭, 재확인 키워드), agent.py(2차 판정 에이전트),
+│                prompts.py(JUDGE_PROMPT 등), schemas.py(JudgeResult)
+├─ retrieval/    과거 VOC 검색(RAG): vectorstore.py(Titan+Chroma 하이브리드 검색, 임베딩 scorer·캐시),
+│                lexical.py(bigram 후보·3차 판정), history.py(유사 VOC 처리 이력)
+├─ guidance/     처리 불가 안내 문구: generator.py(LCEL 체인·템플릿 대체), prompts.py, schemas.py(GuidanceDraft·출처 값)
+├─ lookup/       반복 접수 조회: agent.py(조회 에이전트, 등록자 ID 고정 도구), prompts.py, mock_db.py(화면용 모의 조회)
+├─ records/      이력: repository.py(저장·메뉴별 누적), handling.py(모의 처리 내용 채우기)
+├─ tools/        에이전트 도구: tool_logic.py(읽기 전용 도구 로직), mcp_server.py(fastmcp stdio 서버), mcp_client.py
+├─ workflows/    LangGraph 판정 흐름: voc_graph.py(노드·엣지, run_voc/process_voc), state.py(VocState)
+├─ evaluation/   라운드 평가 코드(dataset, runner, metrics, judges, report, run_eval). 데이터·리포트는 루트 evaluation/
+└─ ui/           Streamlit 화면: app.py
+```
+
+**파일 배치 규칙**
+- 한 도메인의 실행 로직, 프롬프트(`prompts.py`), 입출력 스키마(`schemas.py`)는 그 도메인 폴더 안에 함께 둔다. 프롬프트·스키마를 다른 도메인 폴더나 `shared/`에 두지 않는다.
+- `shared/`에는 두 개 이상의 도메인이 실제로 쓰는 LLM 클라이언트·설정·DB 연결·유틸만 둔다. 한 도메인만 쓰는 코드는 그 도메인으로 옮긴다.
+- 도메인끼리는 `src` 패키지 안의 상대 import(`from ..shared import llm`)를 쓴다. 의존 방향: `ui`·`evaluation` → `workflows` → 각 도메인 → `shared`. 도메인이 `workflows`·`ui`를 import하지 않는다.
+- 에이전트 결과를 바꿔 끼우는 테스트는 모듈 속성을 패치한다: 판정 `src.judgement.agent.judge_voc`, 조회 `src.lookup.agent.summarize_frequent`, 안내 문구 `src.workflows.voc_graph.generate_guidance_with_source`, 유사 이력 scorer `src.workflows.voc_graph.history_scorer`.
+- 앱·MCP 서버 진입점(`src/ui/app.py`, `src/tools/mcp_server.py`)만 프로젝트 루트를 `sys.path`에 넣는다(streamlit run·직접 실행 대비).
+- 새 도메인을 만들면 위 트리와 이 규칙을 함께 고친다.
 
 ## 개발 워크플로우 (Ouroboros)
 

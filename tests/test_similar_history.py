@@ -1,9 +1,14 @@
 """처리 가능 VOC의 유사 과거 VOC 처리 이력(모의 처리 내용 포함)."""
 import pytest
 
-from voc import agent
-from voc.db import MOCK_HANDLING, backfill_mock_handling, connect, init_db
-from voc.service import bigram_scorer, find_similar_history, process_voc, save_voc
+from src.judgement import agent as judge_agent
+from src.lookup import agent as lookup_agent
+from src.records.handling import MOCK_HANDLING, backfill_mock_handling
+from src.shared.db import connect, init_db
+from src.retrieval.lexical import bigram_scorer
+from src.retrieval.history import find_similar_history
+from src.workflows.voc_graph import process_voc
+from src.records.repository import save_voc
 
 MENUS = [{"name": "비밀유지계약", "aliases": ["서약서"]},
          {"name": "사용자 관리", "aliases": ["사용자 권한"]}]
@@ -96,13 +101,13 @@ def test_unprocessable_has_no_history(conn):
 def test_lookup_agent_gets_history(conn, monkeypatch):
     monkeypatch.setenv("VOC_USE_LLM", "1")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "dummy")
-    monkeypatch.setattr("voc.graph.history_scorer", lambda llm_on: bigram_scorer)
+    monkeypatch.setattr("src.workflows.voc_graph.history_scorer", lambda llm_on: bigram_scorer)
     seen = {}
 
     def lookup(rid, menus, history=None):
         seen["history"] = history
         return {"summary": "s", "tool_calls": []}
-    monkeypatch.setattr(agent, "summarize_frequent", lookup)
+    monkeypatch.setattr(lookup_agent, "summarize_frequent", lookup)
     for t in ("서약서 제출 현황 알려주세요", "서약서 제출 현황 요청", "서약서 제출 현황 다시"):
         process_voc(conn, t, "가나다", menus=MENUS)
         backfill_mock_handling(conn)
@@ -110,13 +115,13 @@ def test_lookup_agent_gets_history(conn, monkeypatch):
 
 
 def test_lookup_message_includes_history():
-    msg = agent._lookup_message("가나다", ["비밀유지계약"], [
+    msg = lookup_agent.lookup_message("가나다", ["비밀유지계약"], [
         {"created_at": "2026-11-10T01:00:00Z", "registrant_id": "가나다", "same_registrant": True,
          "voc_text": "서약서 제출 현황", "handling_note": "(모의) 엑셀 회신", "similarity": 0.8}])
     assert "2026-11-10" in msg and "(모의) 엑셀 회신" in msg and "같은 등록자" in msg
-    assert "유사 VOC 처리 이력" in agent.LOOKUP_PROMPT
+    assert "유사 VOC 처리 이력" in lookup_agent.LOOKUP_PROMPT
 
 
 def test_app_labels_history():
-    import app
+    from src.ui import app
     assert "history" in app.STEP_LABELS

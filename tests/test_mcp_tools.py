@@ -4,9 +4,12 @@ import json
 
 import pytest
 
-from voc import agent, tools
-from voc.db import connect, init_db, load_menus
-from voc.service import process_voc
+from src.judgement import agent as judge_agent
+from src.lookup import agent as lookup_agent
+from src.tools import tool_logic as tools
+from src.shared.db import connect, init_db
+from src.shared.config import load_menus
+from src.workflows.voc_graph import process_voc
 
 
 @pytest.fixture
@@ -26,7 +29,7 @@ def test_list_menus_includes_scope(db):
     by = {m["name"]: m for m in json.loads(tools.list_menus())}
     sc = by["정보보호 규정"]["scope"]
     assert "사외 메일 발신 프로세스" in sc["excludes"] and sc["description"]
-    assert "받지 않는 요청" in agent.JUDGE_PROMPT and "scope" in agent.JUDGE_PROMPT
+    assert "받지 않는 요청" in judge_agent.JUDGE_PROMPT and "scope" in judge_agent.JUDGE_PROMPT
 
 
 def test_tool_functions(db):
@@ -48,7 +51,7 @@ def test_search_similar_bigram_when_llm_off(db):
 
 def test_mcp_server_over_stdio(db):
     async def go():
-        ts = await agent.get_tools(agent.JUDGE_TOOLS + agent.LOOKUP_TOOLS)
+        ts = await judge_agent.get_tools(judge_agent.JUDGE_TOOLS + lookup_agent.LOOKUP_TOOLS)
         names = {t.name for t in ts}
         by = {t.name: t for t in ts}
         menus = await by["list_menus"].ainvoke({})
@@ -64,6 +67,6 @@ def test_mcp_server_over_stdio(db):
 
 
 def test_local_search_tool(db):
-    t = agent._local_search_tool()
+    t = judge_agent._local_search_tool()
     out = json.loads(t.invoke({"voc_text": f"{db} 메일이 안 와요"}))
     assert t.name == "search_similar_vocs" and out["results"][0]["menus"] == [db]

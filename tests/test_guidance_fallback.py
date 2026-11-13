@@ -5,7 +5,8 @@ import types
 import pytest
 from botocore.exceptions import ReadTimeoutError
 
-from voc import guidance, llm
+from src.guidance import generator as guidance
+from src.shared import llm
 
 
 @pytest.fixture(autouse=True)

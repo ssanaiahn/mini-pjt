@@ -1,9 +1,12 @@
 """서비스 정책: 해외 법인 임직원·해외 법인 접속은 1차 규칙보다 먼저 막고 고정 문구로 종료."""
 import pytest
 
-from voc import agent
-from voc.db import connect, init_db, load_policies
-from voc.service import match_policy, process_voc
+from src.judgement import agent as judge_agent
+from src.lookup import agent as lookup_agent
+from src.shared.db import connect, init_db
+from src.shared.config import load_policies
+from src.guardrails.policy import match_policy
+from src.workflows.voc_graph import process_voc
 
 MENUS = [{"name": "보안 신고", "aliases": []},
          {"name": "사용자 관리", "aliases": ["사용자 승인", "접속"]}]
@@ -50,8 +53,8 @@ def test_match_policy(policies, text, blocked):
 def test_policy_blocks_before_rule_and_agent(conn, monkeypatch, policies):
     monkeypatch.setenv("VOC_USE_LLM", "1")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "dummy")
-    monkeypatch.setattr(agent, "judge_voc", lambda t: pytest.fail("agent called"))
-    monkeypatch.setattr("voc.graph.generate_guidance_with_source",
+    monkeypatch.setattr(judge_agent, "judge_voc", lambda t: pytest.fail("agent called"))
+    monkeypatch.setattr("src.workflows.voc_graph.generate_guidance_with_source",
                         lambda *a, **k: pytest.fail("LLM guidance called"))
     r = process_voc(conn, "해외 법인 직원도 포털에 접속할 수 있게 열어 주세요", "u001", menus=MENUS)
     msg = {x["id"]: x for x in policies}["overseas_block"]["message"]
@@ -71,5 +74,5 @@ def test_business_trip_not_blocked(conn):
 
 
 def test_app_labels_cover_policy():
-    import app
+    from src.ui import app
     assert "policy" in app.SOURCE_LABELS and "policy_check" in app.STEP_LABELS

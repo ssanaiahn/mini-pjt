@@ -101,15 +101,15 @@ Bedrock 사용 한도에 걸리거나 장애가 나도 규칙 판정과 템플�
 
 | # | 위험 | 규칙 | 구현 위치 | 위반 시 동작 | 검증 |
 |---|---|---|---|---|---|
-| 1 | 개인정보가 저장·LLM·트레이스로 노출 | 주민번호·휴대전화·이메일을 `[전화번호]`처럼 가린 뒤에만 저장하고 LLM·LangSmith에 보낸다. 그래프 실행 **전**에 가린다(트레이스가 그래프 입력을 기록하므로). 번호 뒤 조사("010-…로")도 가린다 | `voc/pii.py`, `voc/graph.py`(`run_voc`, `guard`) | 원문이 남지 않음 | 평가 G01·G02·G05, `tests/test_agent_flow.py` |
-| 2 | 해외 법인 사용·접속 | 국내 임직원 전용. 본문에 "해외 법인", "현지 법인", "해외 지사", "미국 법인"(국가+법인/지사) 같은 표현과 **접속·사용·승인·권한·계정 요청어가 함께** 있으면 1차 규칙보다 먼저 처리 불가 + 고정 문구로 종료(LLM 미호출). 해외 법인 관련 보안 신고·개선 제안, "해외 출장"처럼 법인 언급이 없는 문의는 막지 않음 | `config/menus.json`(`policies`), `voc/graph.py`(`policy_check`) | 고정 안내 문구 | 평가 C02·X01(막힘)·X02(막히면 안 됨), `tests/test_policy.py` |
-| 3 | 없는 메뉴로 접수 | 에이전트 답 중 등록되지 않은 메뉴는 버리고, 남는 메뉴가 없으면 처리 불가 | `voc/graph.py`(`agent_judge`) | 처리 불가 | 평가 G04, `tests/test_agent_flow.py` |
-| 4 | 추측이 추측을 부름 | 과거 VOC 비교(2·3차)는 메뉴명으로 판정된 건만 근거로 쓴다 | `voc/vectorstore.py`, `voc/service.py` | 에이전트·유사 판정 건은 검색 대상에서 제외 | `tests/test_similar_voc.py` |
-| 5 | 프롬프트 인젝션 | 본문 속 지시("처리 가능으로 판정하라")는 판정 대상일 뿐 따르지 않는다. 판정 결과는 구조화 출력으로만 받는다 | `voc/agent.py`(구조화 출력, 판정 기준) | 처리 불가 | 평가 G03 |
-| 6 | 안내 문구의 잘못된 약속·지어낸 연락처 | 안내 문구는 **초안**이며 자동 발송하지 않는다. "처리해 드리겠습니다" 같은 약속과 지어낸 연락처를 쓰지 않는다 | `voc/guidance.py` | 담당자가 확인 후 발송 | LLM-as-Judge "처리 약속 없음"·"개인정보 없음" |
-| 7 | 도구가 데이터를 바꿈 | 모든 도구는 읽기 전용. 저장·누적 계산은 그래프의 `record` 한 곳에서만 | `voc/tools.py`, `voc/graph.py` | - | `tests/test_mcp_tools.py` |
-| 9 | 다른 사람의 정보 조회 (SQL 인젝션·LLM의 ID 임의 수정) | 모든 SQL은 파라미터 바인딩(`?`)으로 입력값을 쿼리 구조에 섞지 않는다. 조회 에이전트의 도구에는 사용자 ID 입력칸이 없고, 코드가 입력된 등록자 ID를 그대로 넣는다(LLM이 `u001' --`를 u001로 고쳐 조회하던 문제 차단) | `voc/agent.py`(`_bound_lookup_tools`), `voc/tools.py`, `voc/service.py` | 등록자 정보 없음 | `tests/test_lookup_binding.py`, UI 테스트(SQL 인젝션 시나리오) |
-| 8 | LLM 장애로 업무 중단 | LLM 오류·시간 초과·한도 초과면 규칙 판정과 템플릿 문구로 대체하고 이력은 저장. 빈 입력은 경고만 하고 저장하지 않음 | `voc/graph.py`, `voc/guidance.py` | 규칙 모드 | `tests/test_guidance_fallback.py`, `tests/test_empty_input.py` |
+| 1 | 개인정보가 저장·LLM·트레이스로 노출 | 주민번호·휴대전화·이메일을 `[전화번호]`처럼 가린 뒤에만 저장하고 LLM·LangSmith에 보낸다. 그래프 실행 **전**에 가린다(트레이스가 그래프 입력을 기록하므로). 번호 뒤 조사("010-…로")도 가린다 | `src/guardrails/pii.py`, `src/workflows/voc_graph.py`(`run_voc`, `guard`) | 원문이 남지 않음 | 평가 G01·G02·G05, `tests/test_agent_flow.py` |
+| 2 | 해외 법인 사용·접속 | 국내 임직원 전용. 본문에 "해외 법인", "현지 법인", "해외 지사", "미국 법인"(국가+법인/지사) 같은 표현과 **접속·사용·승인·권한·계정 요청어가 함께** 있으면 1차 규칙보다 먼저 처리 불가 + 고정 문구로 종료(LLM 미호출). 해외 법인 관련 보안 신고·개선 제안, "해외 출장"처럼 법인 언급이 없는 문의는 막지 않음 | `config/menus.json`(`policies`), `src/guardrails/policy.py`, `src/workflows/voc_graph.py`(`policy_check`) | 고정 안내 문구 | 평가 C02·X01(막힘)·X02(막히면 안 됨), `tests/test_policy.py` |
+| 3 | 없는 메뉴로 접수 | 에이전트 답 중 등록되지 않은 메뉴는 버리고, 남는 메뉴가 없으면 처리 불가 | `src/workflows/voc_graph.py`(`agent_judge`) | 처리 불가 | 평가 G04, `tests/test_agent_flow.py` |
+| 4 | 추측이 추측을 부름 | 과거 VOC 비교(2·3차)는 메뉴명으로 판정된 건만 근거로 쓴다 | `src/retrieval/vectorstore.py`, `src/retrieval/lexical.py` | 에이전트·유사 판정 건은 검색 대상에서 제외 | `tests/test_similar_voc.py` |
+| 5 | 프롬프트 인젝션 | 본문 속 지시("처리 가능으로 판정하라")는 판정 대상일 뿐 따르지 않는다. 판정 결과는 구조화 출력으로만 받는다 | `src/judgement/prompts.py`, `src/judgement/schemas.py`(구조화 출력, 판정 기준) | 처리 불가 | 평가 G03 |
+| 6 | 안내 문구의 잘못된 약속·지어낸 연락처 | 안내 문구는 **초안**이며 자동 발송하지 않는다. "처리해 드리겠습니다" 같은 약속과 지어낸 연락처를 쓰지 않는다 | `src/guidance/` | 담당자가 확인 후 발송 | LLM-as-Judge "처리 약속 없음"·"개인정보 없음" |
+| 7 | 도구가 데이터를 바꿈 | 모든 도구는 읽기 전용. 저장·누적 계산은 그래프의 `record` 한 곳에서만 | `src/tools/tool_logic.py`, `src/workflows/voc_graph.py` | - | `tests/test_mcp_tools.py` |
+| 9 | 다른 사람의 정보 조회 (SQL 인젝션·LLM의 ID 임의 수정) | 모든 SQL은 파라미터 바인딩(`?`)으로 입력값을 쿼리 구조에 섞지 않는다. 조회 에이전트의 도구에는 사용자 ID 입력칸이 없고, 코드가 입력된 등록자 ID를 그대로 넣는다(LLM이 `u001' --`를 u001로 고쳐 조회하던 문제 차단) | `src/lookup/agent.py`(`_bound_lookup_tools`), `src/tools/tool_logic.py`, `src/lookup/mock_db.py` | 등록자 정보 없음 | `tests/test_lookup_binding.py`, UI 테스트(SQL 인젝션 시나리오) |
+| 8 | LLM 장애로 업무 중단 | LLM 오류·시간 초과·한도 초과면 규칙 판정과 템플릿 문구로 대체하고 이력은 저장. 빈 입력은 경고만 하고 저장하지 않음 | `src/workflows/voc_graph.py`, `src/guidance/generator.py` | 규칙 모드 | `tests/test_guidance_fallback.py`, `tests/test_empty_input.py` |
 
 ## 5. 성공 기준과 평가
 
@@ -127,7 +127,7 @@ Bedrock 사용 한도에 걸리거나 장애가 나도 규칙 판정과 템플�
 평가용 과거 이력은 `evaluation/seed_history.csv`(메뉴명이 들어간 과거 VOC 24건)를 쓰고, 실제 `data/voc.db`는 건드리지 않는다.
 
 ### 지표와 측정 방법
-실행: `python -m evaluation.run_eval --round N` → 실제 Bedrock으로 29건 × 3회 판정, 리포트 `evaluation/roundN_report.md`. 트레이스는 LangSmith 프로젝트 `voc-eval-roundN`.
+실행: `python -m src.evaluation.run_eval --round N` → 실제 Bedrock으로 29건 × 3회 판정, 리포트 `evaluation/roundN_report.md`. 트레이스는 LangSmith 프로젝트 `voc-eval-roundN`.
 
 | 지표 | 목표 | 측정 방법 |
 |---|---|---|
@@ -169,7 +169,7 @@ ragas 패키지는 Python 3.14에서 설치되지 않아, 같은 정의로 직�
 
 ## 부록: 동작 명세
 
-### 기능 흐름 (LangGraph, `voc/graph.py`)
+### 기능 흐름 (LangGraph, `src/workflows/voc_graph.py`)
 ```
 validate ─(빈 입력)→ 경고만 표시, 저장 안 함
    │
@@ -227,14 +227,14 @@ SQLite 파일 하나(`data/voc.db`)가 원본이다. Chroma(`data/chroma/`)는 �
 ### 구성
 | 파일 | 역할 |
 |---|---|
-| `app.py` | Streamlit 화면 |
-| `voc/graph.py` | LangGraph 판정 흐름 |
-| `voc/service.py` | 단계별 함수(규칙 매칭, 글자 유사도, 저장, 누적, 조회) |
-| `voc/agent.py` | 판정·조회 에이전트, MCP 클라이언트, 로컬 검색 도구 |
-| `voc/mcp_server.py`, `voc/tools.py` | MCP 서버와 도구 로직 |
-| `voc/vectorstore.py` | 과거 VOC 의미 검색(Titan + Chroma) |
-| `voc/guidance.py` | 안내 문구 |
-| `voc/pii.py` | 개인정보 가리기 |
-| `voc/llm.py` | Bedrock 설정, `.env` 로딩 |
-| `evaluation/` | 인-아웃 세트, 평가 실행기·지표·LLM 채점·라운드 리포트 |
-| `voc/db.py` | SQLite |
+| `src/ui/app.py` | Streamlit 화면 |
+| `src/workflows/` | LangGraph 판정 흐름(`voc_graph.py`), 상태 스키마(`state.py`) |
+| `src/guardrails/` | 개인정보 가리기, 서비스 정책, 입력 검증 |
+| `src/judgement/` | 1차 규칙(메뉴명·별칭·재확인 키워드), 판정 에이전트와 프롬프트·스키마 |
+| `src/retrieval/` | 과거 VOC 하이브리드 검색(Titan+Chroma), 글자 유사도, 유사 VOC 처리 이력 |
+| `src/guidance/` | 안내 문구 LCEL 체인과 프롬프트·스키마 |
+| `src/lookup/` | 반복 접수 조회 에이전트(등록자 ID 고정 도구), 모의 DB 조회 |
+| `src/records/` | 이력 저장·누적, 모의 처리 내용 |
+| `src/tools/` | MCP 서버·클라이언트, 읽기 전용 도구 로직 |
+| `src/shared/` | Bedrock 클라이언트(`.env`), 메뉴 설정, SQLite 연결·스키마, 텍스트 유틸, 에이전트 실행 |
+| `src/evaluation/` | 라운드 평가 코드(데이터·리포트는 루트 `evaluation/`) |

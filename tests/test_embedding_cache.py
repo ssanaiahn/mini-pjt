@@ -5,7 +5,8 @@
 """
 import pytest
 
-from voc import llm, vectorstore
+from src.retrieval import vectorstore
+from src.shared import llm
 
 
 class FakeEmbeddings:

@@ -8,10 +8,11 @@ import csv
 import json
 from pathlib import Path
 
-from voc.db import load_menus
-from voc.service import match_menus
+from ..judgement.rules import match_menus
+from ..shared.config import load_menus
+from ..shared.llm import ROOT
 
-DIR = Path(__file__).resolve().parent
+DIR = ROOT / "evaluation"  # 평가 데이터·리포트 폴더(코드는 src/evaluation)
 QUERIES_PATH = DIR / "test_queries.json"
 SEED_PATH = DIR / "seed_history.csv"
 

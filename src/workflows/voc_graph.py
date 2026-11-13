@@ -1,4 +1,4 @@
-"""VOC 판정 흐름 (LangGraph StateGraph).
+"""[workflows] VOC 판정 흐름 (LangGraph StateGraph). 각 도메인 함수를 노드로 엮는다.
 
 validate ─(빈 입력)→ END
    │
@@ -16,48 +16,28 @@ validate ─(빈 입력)→ END
  record ─(처리 가능)→ history(유사 과거 VOC·처리 내용) ─(누적 3 이상)→ lookup → END
         └(처리 불가)→ END                                   └──────────────→ END
 """
-from typing import Any, Optional, TypedDict
-
 from langgraph.graph import END, START, StateGraph
 
-from . import agent, llm
-from .db import load_menus, load_policies
-from .guidance import department_hints, generate_guidance_with_source
-from .pii import mask_pii
-from .service import (FREQUENT_THRESHOLD, bigram_scorer, find_similar_history, find_similar_voc,
-                      get_menu_counts, lookup_mock_db, match_menus, match_policy, needs_recheck,
-                      save_voc, validate_input)
-
-
-class VocState(TypedDict, total=False):
-    voc_text: str
-    registrant_id: str
-    input_validation: dict
-    pii_found: list
-    matched: list
-    match_source: Optional[str]
-    similar: Optional[dict]
-    judge: Optional[dict]
-    agent_error: Optional[str]
-    recheck: list
-    policy: Optional[dict]
-    guidance: Optional[str]
-    guidance_source: Optional[str]
-    voc_id: int
-    created_at: str
-    snapshot: dict
-    frequent: list
-    account: Any
-    business: list
-    lookup_summary: Optional[dict]
-    similar_history: list
-    steps: list
+from ..guardrails.input_check import validate_input
+from ..guardrails.pii import mask_pii
+from ..guardrails.policy import match_policy
+from ..guidance.generator import department_hints, generate_guidance_with_source
+from ..judgement import agent as judge_agent
+from ..judgement.rules import match_menus, needs_recheck
+from ..lookup import agent as lookup_agent
+from ..lookup.mock_db import lookup_mock_db
+from ..records.repository import FREQUENT_THRESHOLD, get_menu_counts, save_voc
+from ..retrieval.history import find_similar_history
+from ..retrieval.lexical import bigram_scorer, find_similar_voc
+from ..shared import llm
+from ..shared.config import load_menus, load_policies
+from .state import VocState
 
 
 def history_scorer(llm_on):
     """유사 VOC 처리 이력의 유사도: LLM 사용 시 Titan 임베딩, 아니면 글자 유사도."""
     if llm_on:
-        from .vectorstore import embedding_scorer
+        from ..retrieval.vectorstore import embedding_scorer
         return embedding_scorer
     return bigram_scorer
 
@@ -94,7 +74,7 @@ def build_graph(conn, menus, llm_on, policies=None):
                 "recheck": recheck, "steps": step(s, "rule_match")}
 
     def agent_judge(s):
-        r = agent.judge_voc(s["voc_text"])
+        r = judge_agent.judge_voc(s["voc_text"])
         if "error" in r:
             if s.get("recheck"):  # 재확인 중 오류: 1차 규칙 결과를 그대로 쓴다
                 return {"agent_error": r["error"], "steps": step(s, "agent_judge")}
@@ -136,7 +116,7 @@ def build_graph(conn, menus, llm_on, policies=None):
 
     def lookup(s):
         account, business = lookup_mock_db(conn, s["registrant_id"], s["frequent"])
-        summary = (agent.summarize_frequent(s["registrant_id"], s["frequent"],
+        summary = (lookup_agent.summarize_frequent(s["registrant_id"], s["frequent"],
                                             history=s.get("similar_history")) if llm_on else None)
         return {"account": account, "business": business, "lookup_summary": summary,
                 "steps": step(s, "lookup")}
@@ -201,3 +181,8 @@ def run_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
             "pii_found": s.get("pii_found") or [], "voc_text": s["voc_text"],
             "similar_history": s.get("similar_history") or [],
             "mode": "llm" if llm_on else "rule", "steps": s["steps"]}
+
+
+def process_voc(conn, voc_text, registrant_id, menus=None, use_api=True):
+    """VOC 1건 판정·저장(화면·평가의 진입점). run_voc와 같다."""
+    return run_voc(conn, voc_text, registrant_id, menus=menus, use_api=use_api)

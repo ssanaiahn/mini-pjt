@@ -26,9 +26,9 @@ AWS_DEFAULT_REGION=us-east-1
 
 ## 실행
 ```bash
-streamlit run app.py
+streamlit run src/ui/app.py
 ```
-1. VOC 본문과 등록자 ID(모의 사용자: `u001`~`u006`, `가나다`, `나라바`, `라마바`, `사아자`, `마바사`, `가다마`, `abc`, 시연용 20명 `def`·`ghi`·`aaa`·`다나가`·`아차파` 등. 전체 목록은 `voc/db.py`의 `MOCK_USERS`)를 입력하고 제출합니다.
+1. VOC 본문과 등록자 ID(모의 사용자: `u001`~`u006`, `가나다`, `나라바`, `라마바`, `사아자`, `마바사`, `가다마`, `abc`, 시연용 20명 `def`·`ghi`·`aaa`·`다나가`·`아차파` 등. 전체 목록은 `src/shared/db.py`의 `MOCK_USERS`)를 입력하고 제출합니다.
 2. 화면에 다음이 표시됩니다.
    - 판정 결과
    - 판정 방식과 근거, 에이전트가 사용한 도구, 처리 경로
@@ -37,7 +37,7 @@ streamlit run app.py
    - 누적 3회 이상 시 조회 결과와 조회 에이전트 요약
 3. 데이터는 `data/voc.db`(SQLite)에 저장되어 재시작해도 유지됩니다. 초기화하려면 앱을 끄고 `data/voc.db`와 `data/chroma/`를 지우세요.
 
-MCP 서버는 앱이 필요할 때 자동으로 실행합니다. 서버만 따로 실행하려면 `python -m voc.mcp_server`를 쓰세요.
+MCP 서버는 앱이 필요할 때 자동으로 실행합니다. 서버만 따로 실행하려면 `python -m src.tools.mcp_server`를 쓰세요.
 
 ## 테스트
 ```bash
@@ -49,7 +49,7 @@ python -m pytest -q
 
 ## 평가 (실제 Bedrock)
 ```bash
-python -m evaluation.run_eval --round 1
+python -m src.evaluation.run_eval --round 1
 ```
 - 인-아웃 세트 `evaluation/test_queries.json`(27건)을 실제 Bedrock으로 3회씩 판정하고 지표를 계산해 `evaluation/round1_report.md`를 씁니다. 설계는 `evaluation/design.md`에 있습니다.
 - 평가용 임시 DB와 과거 이력(`evaluation/seed_history.csv`)을 쓰며, `data/voc.db`는 건드리지 않습니다.

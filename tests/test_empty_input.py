@@ -6,8 +6,10 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from voc.db import connect, init_db, load_menus  # noqa: E402
-from voc.service import get_menu_counts, process_voc  # noqa: E402
+from src.shared.db import connect, init_db  # noqa: E402
+from src.shared.config import load_menus  # noqa: E402
+from src.records.repository import get_menu_counts  # noqa: E402
+from src.workflows.voc_graph import process_voc  # noqa: E402
 
 
 @pytest.mark.parametrize("text,rid", [

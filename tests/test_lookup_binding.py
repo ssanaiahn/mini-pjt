@@ -5,7 +5,8 @@
 """
 import asyncio
 
-from voc import agent
+from src.judgement import agent as judge_agent
+from src.lookup import agent as lookup_agent
 
 
 class FakeMcpTool:
@@ -19,7 +20,7 @@ class FakeMcpTool:
 
 def bound(registrant_id):
     calls = []
-    tools = agent._bound_lookup_tools(
+    tools = lookup_agent._bound_lookup_tools(
         [FakeMcpTool(n, calls) for n in ("lookup_account", "lookup_business_data", "get_menu_count")],
         registrant_id)
     return {t.name: t for t in tools}, calls
@@ -44,4 +45,4 @@ def test_bound_tools_always_use_entered_registrant_id():
 
 
 def test_lookup_prompt_says_id_is_fixed():
-    assert "다른 등록자" in agent.LOOKUP_PROMPT
+    assert "다른 등록자" in lookup_agent.LOOKUP_PROMPT

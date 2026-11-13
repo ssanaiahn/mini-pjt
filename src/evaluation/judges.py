@@ -55,7 +55,7 @@ class FaithfulnessResult(BaseModel):
 def _model(model):
     if model is not None:
         return model
-    from voc import llm
+    from ..shared import llm
     return llm.chat_model(timeout=60, max_tokens=1000)
 
 

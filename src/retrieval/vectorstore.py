@@ -1,4 +1,5 @@
-"""과거 VOC 의미 검색: Titan 임베딩 + Chroma(파일 저장).
+"""[retrieval] 과거 VOC 하이브리드 검색(RAG): Titan 임베딩 + Chroma(파일 저장) + 글자 유사도 리랭킹.
+유사 VOC 처리 이력용 임베딩 scorer(캐시 포함)도 여기 있다.
 
 검색 기준은 '메뉴명으로 처리 가능 판정된' 과거 VOC만이다(유사·에이전트 판정 건은 제외해
 판정이 번지는 것을 막는다). SQLite 이력이 원본이고, Chroma는 검색할 때마다 이력과 동기화한다.
@@ -6,7 +7,8 @@
 import os
 from pathlib import Path
 
-from . import llm
+from ..shared import llm
+from ..shared.text import similarity as lexical_similarity
 
 COLLECTION = "voc_history"
 DEFAULT_PATH = llm.ROOT / "data" / "chroma"
@@ -104,8 +106,6 @@ def search(conn, voc_text, k=3, path=None):
 
     반환 [{id, voc_text, menus, similarity(하이브리드), semantic(1-코사인 거리), lexical(bigram)}]
     """
-    from .service import similarity as lexical_similarity
-
     rows = reference_rows(conn)
     if not rows:
         return []

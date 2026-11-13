@@ -1,15 +1,23 @@
-"""VOC 접수 판단·응답 보조 Streamlit 앱. 실행: streamlit run app.py
+"""[ui] VOC 접수 판단·응답 보조 Streamlit 앱. 실행(프로젝트 루트에서): streamlit run src/ui/app.py
 
 화면 디자인: UI/UX Pro Max 추천 "Minimalism & Swiss Style"(업무용 도구) — 테마는
 .streamlit/config.toml, 아이콘은 Material Symbols, 상태는 색 + 아이콘 + 글자로 함께 표시.
 """
 import os
+import sys
+from pathlib import Path
 
 import streamlit as st
 
-from voc import db as vocdb
-from voc import llm
-from voc.service import process_voc
+# streamlit run은 스크립트 폴더(src/ui)만 import 경로에 넣으므로 프로젝트 루트를 추가한다.
+_ROOT = str(Path(__file__).resolve().parents[2])
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from src.records.handling import backfill_mock_handling  # noqa: E402
+from src.shared import config, llm  # noqa: E402
+from src.shared import db as vocdb  # noqa: E402
+from src.workflows.voc_graph import process_voc  # noqa: E402
 
 STEP_LABELS = {"validate": "입력 검증", "guard": "개인정보 가리기", "policy_check": "서비스 정책 확인",
                "rule_match": "메뉴명 확인", "agent_judge": "판정 에이전트",
@@ -163,14 +171,14 @@ def main():
     st.title("VOC 접수 판단·응답 보조", icon=":material/support_agent:", anchor=False)
     st.caption("VOC를 접수할지, 어느 메뉴인지 판단하고, 처리할 수 없는 건은 안내 문구 초안을 만듭니다.")
     try:
-        menus = vocdb.load_menus()
+        menus = config.load_menus()
     except Exception as e:  # 설정 파일 오류: 판정을 막고 오류 표시
         st.error(f"메뉴 설정 파일을 읽을 수 없습니다: {e}", icon=":material/error:")
         return
     render_sidebar(menus)
     conn = vocdb.connect()
     vocdb.init_db(conn, menus=menus)
-    vocdb.backfill_mock_handling(conn)  # 처리 기록이 없는 과거 접수 건에 모의 처리 내용
+    backfill_mock_handling(conn)  # 처리 기록이 없는 과거 접수 건에 모의 처리 내용
     with st.form("voc_form"):
         voc_text = st.text_area("VOC 본문", key="voc_text", placeholder="예: 서약서 제출 현황을 부서별로 받고 싶습니다",
                                 help="주민번호·전화번호·이메일은 저장하기 전에 자동으로 가려집니다.")

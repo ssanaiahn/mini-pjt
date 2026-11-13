@@ -1,4 +1,4 @@
-"""AWS Bedrock(Claude·Titan 임베딩) 연결 설정.
+"""[shared] AWS Bedrock(Claude·Titan 임베딩) 클라이언트 설정 — 모든 에이전트·도구가 공통으로 쓴다.
 
 - 프로젝트 루트의 .env를 읽는다(이미 설정된 환경변수는 덮어쓰지 않음).
 - LLM 사용 조건: VOC_USE_LLM이 0/false가 아니고, AWS 자격 증명(AWS_ACCESS_KEY_ID 또는 AWS_PROFILE)이 있음.
@@ -7,7 +7,7 @@
 import os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]  # 프로젝트 루트(src/shared/llm.py 기준)
 
 CHAT_MODEL = "global.anthropic.claude-sonnet-4-6"  # VOC_BEDROCK_MODEL로 변경 가능
 EMBED_MODEL = "amazon.titan-embed-text-v2:0"

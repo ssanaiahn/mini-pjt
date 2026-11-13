@@ -3,8 +3,9 @@ import sqlite3
 
 import pytest
 
-from voc.db import connect, init_db
-from voc.service import SIMILARITY_THRESHOLD, similarity
+from src.shared.db import connect, init_db
+from src.retrieval.lexical import SIMILARITY_THRESHOLD
+from src.shared.text import similarity
 
 
 MENUS = [
@@ -23,7 +24,7 @@ def conn(tmp_path, monkeypatch):
 
 
 def process_voc(conn, text, rid, **kw):
-    from voc.service import process_voc as real
+    from src.workflows.voc_graph import process_voc as real
     return real(conn, text, rid, menus=MENUS, **kw)
 
 

@@ -3,9 +3,9 @@ import types
 
 import pytest
 
-from voc import vectorstore
-from voc.db import connect, init_db
-from voc.service import save_voc
+from src.retrieval import vectorstore
+from src.shared.db import connect, init_db
+from src.records.repository import save_voc
 
 MENUS = [{"name": "비밀유지계약", "aliases": ["서약서"]}, {"name": "보안 신고", "aliases": []}]
 QUERY = "서약서 제출 현황 알려주세요"

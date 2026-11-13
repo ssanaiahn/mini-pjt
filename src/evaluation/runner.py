@@ -11,8 +11,8 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from voc.db import connect, init_db
-from voc.graph import run_voc
+from ..shared.db import connect, init_db
+from ..workflows.voc_graph import run_voc
 
 LLM_ERROR_GUIDANCE = ("template_error", "template_timeout")
 

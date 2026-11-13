@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from evaluation.dataset import load_queries, load_seed
+from src.evaluation.dataset import load_queries, load_seed
 
 MENUS = [
     {"name": "보안 신고", "aliases": []},

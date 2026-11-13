@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from voc.db import load_menus  # noqa: E402
+from src.shared.config import load_menus  # noqa: E402
 
 
 def _write(tmp_path, menus):
@@ -47,8 +47,9 @@ def test_ac8_duplicate_after_normalization_names(tmp_path):
 
 
 def test_ac8_same_menu_name_and_alias_matched_once_count_plus_one(tmp_path):
-    from voc.db import connect, init_db
-    from voc.service import match_menus, process_voc
+    from src.shared.db import connect, init_db
+    from src.judgement.rules import match_menus
+    from src.workflows.voc_graph import process_voc
 
     menus = [{"name": "주문 조회", "aliases": ["오더조회", "Order"]},
              {"name": "배송", "aliases": []}]
@@ -63,7 +64,7 @@ def test_ac8_same_menu_name_and_alias_matched_once_count_plus_one(tmp_path):
 
 
 def test_ac8_longer_alias_wins_over_contained_short_menu():
-    from voc.service import match_menus
+    from src.judgement.rules import match_menus
 
     menus = [{"name": "주문내역", "aliases": []}, {"name": "주문", "aliases": []}]
     assert match_menus("주문내역 확인", menus) == ["주문내역"]

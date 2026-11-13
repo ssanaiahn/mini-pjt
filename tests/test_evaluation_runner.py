@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from evaluation import runner
-from voc.db import connect
+from src.evaluation import runner
+from src.shared.db import connect
 
 CASE = {"id": "P01", "category": "paraphrase", "text": "이상한 메일", "registrant_id": "u001"}
 

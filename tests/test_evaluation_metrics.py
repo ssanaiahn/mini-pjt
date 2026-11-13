@@ -1,7 +1,7 @@
 """평가 지표 계산(순수 함수)."""
 import pytest
 
-from evaluation import metrics as m
+from src.evaluation import metrics as m
 
 REG = {"보안 신고", "사용자 관리"}
 
