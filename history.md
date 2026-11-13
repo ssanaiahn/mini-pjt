@@ -122,3 +122,12 @@
 - 11-13에 짧은 호출로 us-east-1 Sonnet 4.6이 다시 동작하는 것을 확인하고, `.env`의 임시 줄(`VOC_BEDROCK_MODEL=…haiku…`와 설명 주석)을 삭제했다. 백업은 작업 폴더 밖에 보관.
 - 결과: 앱 모델이 코드 기본값 `global.anthropic.claude-sonnet-4-6`이 되어 평가 모델과 같아졌다. 판정 에이전트 1건으로 확인("시스템 사용이 안 돼요" → 사용자 관리).
 - `.env`는 git에 포함되지 않으므로 커밋 대상이 아니다.
+
+### 17. `eval-rounds` 브랜치를 `main`에 합치기
+- 이유: 제출을 GitHub 주소로 하기로 함(채점자는 기본 브랜치 `main`을 봄). GitHub 저장소 `ssanaiahn/mini-pjt`는 아직 비어 있음.
+- 방법: 빨리감기(fast-forward)로 `main`을 `3a93d85` → `bb15dca`로 옮기고 `main`으로 전환. 충돌 없음, 작업 폴더 파일 변경 없음.
+- 사용자 결정: 저장소를 공개로 바꿔 제출, 커밋 작성자 이메일은 그대로 둠.
+
+### 18. GitHub에 올리기와 공개 전환
+- 공개 전 점검: `.env`는 커밋된 적 없음, AWS·LangSmith 키 패턴 없음(README 예시 `...`만), DB·Chroma 파일 없음, 전화번호는 모두 가짜 값.
+- `main`만 `origin`(`ssanaiahn/mini-pjt`)에 푸시(다른 브랜치는 올리지 않음).
